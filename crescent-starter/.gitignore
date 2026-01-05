@@ -1,0 +1,17 @@
+# Luvit
+*.log
+.DS_Store
+
+# Development
+tmp/
+temp/
+*.tmp
+
+# IDE
+.vscode/
+.idea/
+
+# Database (se usar SQLite)
+*.db
+*.sqlite
+*.sqlite3
