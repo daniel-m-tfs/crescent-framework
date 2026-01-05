@@ -1,0 +1,43 @@
+[Unit]
+Description=Crescent Framework Application
+Documentation=https://github.com/yourusername/crescent
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/crescent
+
+# Variáveis de ambiente
+Environment="ENV=production"
+Environment="NODE_ENV=production"
+EnvironmentFile=-/etc/crescent/environment
+
+# Comando de execução
+ExecStart=/usr/local/bin/luvit example.lua
+
+# Restart policy
+Restart=always
+RestartSec=10
+StartLimitInterval=60
+StartLimitBurst=3
+
+# Segurança
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/www/crescent/logs
+
+# Recursos
+MemoryLimit=512M
+CPUQuota=50%
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=crescent
+
+[Install]
+WantedBy=multi-user.target
