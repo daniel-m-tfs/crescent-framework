@@ -43,7 +43,7 @@
     <!-- Prism.js for syntax highlighting -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
 </head>
-<body>
+<body class="docs-page">
     <!-- Navigation -->
     <nav class="navbar">
         <div class="container">
@@ -52,6 +52,13 @@
                     <img src="./crescent-logo-semfundo.png" alt="Crescent Framework" class="logo">
                     <span class="brand-name">Crescent</span>
                 </div>
+                <button class="mobile-menu-toggle" aria-label="Toggle menu">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="3" y1="6" x2="21" y2="6"></line>
+                        <line x1="3" y1="12" x2="21" y2="12"></line>
+                        <line x1="3" y1="18" x2="21" y2="18"></line>
+                    </svg>
+                </button>
                 <ul class="nav-links">
                     <li><a href="index.html">Home</a></li>
                     <li><a href="index.html#features">Features</a></li>
@@ -128,11 +135,13 @@
                 <h1>🌙 Crescent Framework</h1>
                 <p class="lead">Framework web moderno e performático construído em Lua, Luvit e MySQL.</p>
                 
-                <div class="highlight-box" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; margin-bottom: 2rem;">
-                    <h3>🚀 Comece Agora!</h3>
-                    <p style="margin: 0.5rem 0;">Baixe o Crescent Starter e comece a desenvolver em minutos:</p>
+                <div class="highlight-box" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; margin-bottom: 2rem; padding: 2rem; border-radius: 1rem;">
+                    <h3 style="color: white; margin-bottom: 0.75rem;">🚀 Comece Agora!</h3>
+                    <p style="margin: 0.5rem 0; color: rgba(255, 255, 255, 0.95);">Baixe o Crescent Starter e comece a desenvolver em minutos:</p>
                     <a href="https://github.com/daniel-m-tfs/crescent-framework/releases/download/Versões/crescent-starter.zip" 
-                       style="display: inline-block; background: white; color: #667eea; padding: 0.75rem 1.5rem; border-radius: 0.5rem; text-decoration: none; font-weight: 600; margin-top: 0.5rem;">
+                       style="display: inline-block; background: white; color: #667eea; padding: 0.75rem 1.5rem; border-radius: 0.5rem; text-decoration: none; font-weight: 700; margin-top: 0.75rem; transition: all 0.3s;"
+                       onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 10px 20px rgba(0,0,0,0.2)'"
+                       onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none'">
                         📦 Download crescent-starter.zip
                     </a>
                 </div>
@@ -1121,6 +1130,36 @@ sudo systemctl reload nginx</code></pre>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-lua.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-nginx.min.js"></script>
+    
+    <!-- Mobile Menu Toggle -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const menuToggle = document.querySelector('.mobile-menu-toggle');
+            const navLinks = document.querySelector('.nav-links');
+            
+            if (menuToggle && navLinks) {
+                menuToggle.addEventListener('click', function() {
+                    navLinks.classList.toggle('active');
+                });
+                
+                // Fecha o menu ao clicar em um link
+                navLinks.querySelectorAll('a').forEach(link => {
+                    link.addEventListener('click', function() {
+                        navLinks.classList.remove('active');
+                    });
+                });
+                
+                // Fecha o menu ao clicar fora
+                document.addEventListener('click', function(event) {
+                    if (!event.target.closest('.nav-content')) {
+                        navLinks.classList.remove('active');
+                    }
+                });
+            }
+        });
+    </script>
+    
     <script src="docs.js"></script>
 </body>
 </html>
+

@@ -32,8 +32,10 @@ body {
 
 .container {
     max-width: 1200px;
+    width: 100%;
     margin: 0 auto;
     padding: 0 2rem;
+    overflow-x: hidden;
 }
 
 /* Navigation */
@@ -69,6 +71,7 @@ body {
     font-size: 1.5rem;
     font-weight: 700;
     background: var(--gradient);
+    background-clip: text;
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
 }
@@ -96,6 +99,21 @@ body {
     padding: 0.5rem 1.5rem;
     border-radius: 0.5rem;
     color: white !important;
+}
+
+/* Mobile Menu Toggle */
+.mobile-menu-toggle {
+    display: none;
+    background: none;
+    border: none;
+    color: var(--text);
+    font-size: 1.5rem;
+    cursor: pointer;
+    padding: 0.5rem;
+}
+
+.mobile-menu-toggle:hover {
+    color: var(--primary);
 }
 
 /* Hero Section - Netflix Style */
@@ -376,6 +394,7 @@ body {
     text-align: left;
     overflow: hidden;
     box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+    max-width: 100%;
 }
 
 .code-preview pre {
@@ -383,12 +402,16 @@ body {
     padding: 2rem;
     overflow-x: auto;
     background: transparent !important;
+    white-space: pre;
+    word-wrap: normal;
 }
 
 .code-preview pre[class*="language-"] {
     margin: 0;
     padding: 2rem;
     background: transparent !important;
+    white-space: pre;
+    word-wrap: normal;
 }
 
 .code-preview code {
@@ -616,12 +639,39 @@ body {
 .cta-box h3 {
     font-size: 2rem;
     margin-bottom: 1rem;
+    color: white;
 }
 
 .cta-box p {
     font-size: 1.125rem;
     margin-bottom: 2rem;
-    opacity: 0.9;
+    opacity: 0.95;
+    color: white;
+}
+
+/* Botões dentro do CTA box precisam de contraste */
+.cta-box .btn-primary {
+    background: white;
+    color: var(--primary);
+    font-weight: 700;
+}
+
+.cta-box .btn-primary:hover {
+    background: rgba(255, 255, 255, 0.9);
+    transform: translateY(-2px);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+}
+
+.cta-box .btn-secondary {
+    background: transparent;
+    border: 2px solid white;
+    color: white;
+    font-weight: 700;
+}
+
+.cta-box .btn-secondary:hover {
+    background: rgba(255, 255, 255, 0.1);
+    transform: translateY(-2px);
 }
 
 /* Status Section */
@@ -745,31 +795,370 @@ body {
 }
 
 /* Responsive */
+@media (max-width: 1024px) {
+    .hero-container {
+        grid-template-columns: 1fr;
+        gap: 3rem;
+        text-align: center;
+    }
+    
+    .hero-logo {
+        order: -1;
+        justify-content: center;
+    }
+    
+    .hero-content {
+        text-align: center;
+    }
+    
+    .hero-buttons {
+        justify-content: center;
+    }
+}
+
 @media (max-width: 768px) {
+    .container {
+        padding: 0 1.5rem;
+    }
+    
+    /* Header Mobile - Background sólido */
+    .navbar {
+        padding: 0;
+        background: rgb(10, 15, 30) !important;
+        backdrop-filter: none !important;
+    }
+    
+    .nav-content {
+        padding: 0.75rem 0;
+    }
+    
+    .mobile-menu-toggle {
+        display: block;
+    }
+    
+    .nav-links {
+        position: fixed;
+        top: 73px;
+        left: 0;
+        right: 0;
+        background: rgb(10, 15, 30) !important;
+        backdrop-filter: none !important;
+        flex-direction: column;
+        gap: 0;
+        padding: 1rem 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        transform: translateY(-100%);
+        opacity: 0;
+        visibility: hidden;
+        transition: all 0.3s ease;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    }
+    
+    .nav-links.active {
+        transform: translateY(0);
+        opacity: 1;
+        visibility: visible;
+    }
+    
+    .nav-links li {
+        width: 100%;
+        text-align: center;
+        padding: 0.75rem 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        background: transparent;
+    }
+    
+    .nav-links li:last-child {
+        border-bottom: none;
+    }
+    
+    .nav-links a {
+        color: white !important;
+    }
+    
+    .nav-links a:hover {
+        background: rgba(99, 102, 241, 0.1);
+    }
+    
+    .github-link {
+        display: block;
+        width: 80%;
+        margin: 0.5rem auto;
+        text-align: center;
+    }
+    
+    /* Hero Mobile */
+    .hero {
+        padding: 6rem 0 2rem !important; /* Aumenta padding-top para não sobrepor com navbar fixo */
+        min-height: auto !important;
+        overflow: hidden !important;
+    }
+    
+    .hero-container {
+        width: 100% !important;
+        max-width: 100% !important;
+        padding: 0 1rem !important;
+        overflow: hidden !important;
+        grid-template-columns: 1fr !important; /* Uma coluna só no mobile */
+        gap: 2rem !important;
+    }
+    
+    .hero-content {
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important; /* Permite que o conteúdo encolha */
+        overflow: hidden !important;
+        text-align: center !important; /* Centraliza conteúdo no mobile */
+    }
+    
+    .badge {
+        font-size: 0.75rem !important;
+        padding: 0.4rem 0.8rem !important;
+        margin-bottom: 1.5rem !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        max-width: 100% !important;
+        display: inline-block !important;
+    }
+    
+    .hero-logo {
+        display: none; /* Esconde a logo grande no mobile */
+    }
+    
     .hero-title {
-        font-size: 2.5rem;
+        font-size: 1.75rem !important;
+        line-height: 1.2 !important;
+        word-wrap: break-word !important;
+        overflow-wrap: break-word !important;
+        max-width: 100% !important;
+    }
+    
+    .hero-description {
+        font-size: 0.95rem !important;
+        line-height: 1.6 !important;
+        word-wrap: break-word !important;
+        overflow-wrap: break-word !important;
+        max-width: 100% !important;
+    }
+    
+    .hero-buttons {
+        justify-content: center !important; /* Centraliza botões no mobile */
+    }
+    
+    .code-preview {
+        width: calc(100% + 2rem) !important; /* Compensa padding do container */
+        max-width: calc(100% + 2rem) !important;
+        margin: 1.5rem -1rem 0 -1rem !important; /* Margin negativa nas laterais */
+        padding: 0 !important;
+        overflow: hidden !important;
+        border-radius: 0.5rem !important;
+    }
+    
+    .code-preview pre {
+        font-size: 0.75rem !important;
+        padding: 1rem !important;
+        overflow-x: auto !important;
+        margin: 0 !important;
+        white-space: pre !important;
+        word-wrap: normal !important;
+    }
+    
+    .code-preview code {
+        font-size: 0.75rem !important;
+        white-space: pre !important;
+        word-wrap: normal !important;
+    }
+    
+    .code-preview pre[class*="language-"] {
+        padding: 1rem !important;
+        margin: 0 !important;
+        font-size: 0.75rem !important;
+    }
+    
+    .hero-buttons {
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+    
+    .btn {
+        width: 100%;
+        text-align: center;
     }
 
     .nav-links {
         gap: 1rem;
         font-size: 0.9rem;
+        flex-wrap: wrap;
+        justify-content: center;
     }
 
     .features-grid,
     .tech-grid {
         grid-template-columns: 1fr;
+        gap: 1.5rem;
     }
 
     .footer-content {
         grid-template-columns: 1fr;
+        gap: 2rem;
     }
 
     .step {
         flex-direction: column;
         gap: 1rem;
     }
+    
+    .step-number {
+        width: 50px;
+        height: 50px;
+        font-size: 1.25rem;
+    }
 
     .section-header h2 {
-        font-size: 2rem;
+        font-size: 1.75rem;
+    }
+    
+    .section-header p {
+        font-size: 1rem;
+    }
+    
+    .feature-card {
+        padding: 1.5rem;
+    }
+    
+    .cta-box {
+        padding: 2rem 1.5rem;
+    }
+    
+    .cta-box h3 {
+        font-size: 1.5rem;
+    }
+    
+    .cta-box p {
+        font-size: 1rem;
+    }
+    
+    .code-preview {
+        padding: 0;
+    }
+    
+    .code-preview pre {
+        padding: 1.5rem;
+        font-size: 0.8rem;
+    }
+    
+    .status-badge {
+        font-size: 0.875rem;
+        padding: 0.5rem 1rem;
+    }
+}
+
+@media (max-width: 480px) {
+    /* Garante que nada ultrapasse os limites */
+    * {
+        max-width: 100vw !important;
+        min-width: 0 !important;
+    }
+    
+    .container {
+        padding: 0 1rem !important;
+    }
+    
+    .navbar {
+        padding: 0.75rem 0;
+    }
+    
+    .nav-brand {
+        gap: 0.5rem;
+    }
+    
+    .logo {
+        height: 30px;
+    }
+    
+    .brand-name {
+        font-size: 1.25rem;
+    }
+    
+    .nav-links {
+        gap: 0.5rem;
+        font-size: 0.8rem;
+    }
+    
+    /* Hero em telas muito pequenas */
+    .hero {
+        padding: 7rem 0 2rem !important; /* Ainda mais padding-top */
+    }
+    
+    .hero-container {
+        padding: 0 0.75rem !important;
+    }
+    
+    .hero-title {
+        font-size: 1.5rem !important;
+        margin-bottom: 1rem !important;
+    }
+    
+    .hero-description {
+        font-size: 0.875rem !important;
+        margin-bottom: 1.5rem !important;
+    }
+    
+    .badge {
+        font-size: 0.7rem !important;
+        padding: 0.35rem 0.7rem !important;
+        margin-bottom: 1rem !important;
+    }
+    
+    .hero-buttons {
+        gap: 0.5rem !important;
+    }
+    
+    .btn {
+        font-size: 0.875rem !important;
+        padding: 0.75rem 1.5rem !important;
+    }
+    
+    .code-preview {
+        margin: 1rem -0.75rem 0 -0.75rem !important;
+        padding: 0 !important;
+        width: calc(100% + 1.5rem) !important;
+        border-radius: 0.5rem !important;
+    }
+    
+    .code-preview pre {
+        font-size: 0.7rem !important;
+        padding: 0.875rem !important;
+        line-height: 1.6 !important;
+    }
+    
+    .code-preview code {
+        font-size: 0.7rem !important;
+    }
+    
+    .code-preview pre[class*="language-"] {
+        font-size: 0.7rem !important;
+        padding: 0.875rem !important;
+    }
+    
+    .hero-logo-img {
+        width: 150px;
+        height: 150px;
+    }
+    
+    .tech-icon svg {
+        width: 36px;
+        height: 36px;
+    }
+    
+    .feature-icon svg {
+        width: 32px;
+        height: 32px;
+    }
+    
+    .btn-large {
+        padding: 1rem 1.5rem;
+        font-size: 1rem;
     }
 }
