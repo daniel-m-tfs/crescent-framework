@@ -125,6 +125,7 @@ body {
     overflow: visible; /* Mudado de hidden para visible para não cortar a imagem */
     display: flex;
     align-items: center;
+    justify-content: center;
     background: radial-gradient(ellipse at top, #1a1f3a 0%, var(--bg) 50%);
 }
 
