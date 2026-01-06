@@ -1,0 +1,40 @@
+#!/bin/bash
+# Crescent CLI wrapper
+# This script wraps the luvit command to make CLI usage easier
+
+# Find the crescent-cli.lua file in luarocks installation
+CLI_LOCATIONS=(
+    "$HOME/.luarocks/share/lua/5.4/crescent-cli.lua"
+    "$HOME/.luarocks/share/lua/5.3/crescent-cli.lua"
+    "$HOME/.luarocks/share/lua/5.1/crescent-cli.lua"
+    "/usr/local/share/lua/5.4/crescent-cli.lua"
+    "/usr/local/share/lua/5.1/crescent-cli.lua"
+    "./crescent-cli.lua"
+)
+
+CLI_PATH=""
+for path in "${CLI_LOCATIONS[@]}"; do
+    if [ -f "$path" ]; then
+        CLI_PATH="$path"
+        break
+    fi
+done
+
+if [ -z "$CLI_PATH" ]; then
+    echo "Error: Could not find crescent-cli.lua"
+    echo "Please make sure crescent is properly installed via luarocks"
+    exit 1
+fi
+
+# Check if luvit is installed
+if ! command -v luvit &> /dev/null; then
+    echo "Error: luvit is not installed"
+    echo ""
+    echo "Install luvit first:"
+    echo "  macOS:  brew install luvit"
+    echo "  Linux:  curl -L https://github.com/luvit/lit/raw/master/get-lit.sh | sh"
+    exit 1
+fi
+
+# Execute the CLI with luvit, passing all arguments
+exec luvit "$CLI_PATH" "$@"

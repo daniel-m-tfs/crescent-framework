@@ -501,6 +501,189 @@ commands.migrate_status = function()
     end
 end
 
+-- Command: new project
+commands.new = function(project_name)
+    if not project_name or project_name == "" then
+        print_error("Nome do projeto é obrigatório!")
+        print_info("Uso: crescent new <nome-do-projeto>")
+        return
+    end
+    
+    print_header("Criando novo projeto Crescent: " .. project_name)
+    
+    -- Verifica se diretório já existe
+    local check_cmd = string.format('test -d "%s"', project_name)
+    local exists = os.execute(check_cmd) == 0
+    
+    if exists then
+        print_error("Diretório '" .. project_name .. "' já existe!")
+        return
+    end
+    
+    -- Cria estrutura de diretórios
+    print_info("Criando estrutura de diretórios...")
+    local dirs = {
+        project_name,
+        project_name .. "/src",
+        project_name .. "/config",
+        project_name .. "/migrations",
+        project_name .. "/public",
+        project_name .. "/tests"
+    }
+    
+    for _, dir in ipairs(dirs) do
+        ensure_dir(dir)
+    end
+    
+    -- Cria app.lua
+    local app_content = [[#!/usr/bin/env luvit
+-- app.lua
+-- Ponto de entrada da aplicação
+
+local Crescent = require('crescent')
+local env = require('config.development')
+
+-- Cria aplicação
+local app = Crescent.new(env)
+
+-- Middleware
+app:use(require('crescent.middleware.logger'))
+app:use(require('crescent.middleware.cors'))
+
+-- Rotas básicas
+app:get('/', function(ctx)
+    return ctx.json(200, {
+        message = "Welcome to Crescent Framework!",
+        version = "1.0.0",
+        docs = "https://crescent.tyne.com.br"
+    })
+end)
+
+app:get('/health', function(ctx)
+    return ctx.json(200, { status = "ok" })
+end)
+
+-- Exemplo de CRUD (descomente para usar)
+-- local usersModule = require("src.users")
+-- usersModule.register(app)
+
+-- Inicia servidor
+app:listen()
+]]
+    
+    write_file(project_name .. "/app.lua", app_content)
+    print_success("Criado: app.lua")
+    
+    -- Cria .env.example
+    local env_content = [[# Database Configuration
+DB_HOST=localhost
+DB_PORT=3306
+DB_NAME=crescent_db
+DB_USER=root
+DB_PASSWORD=
+
+# Server Configuration
+PORT=3000
+HOST=0.0.0.0
+]]
+    
+    write_file(project_name .. "/.env.example", env_content)
+    print_success("Criado: .env.example")
+    
+    -- Cria config/development.lua
+    local config_content = [[-- config/development.lua
+return {
+    port = tonumber(os.getenv("PORT")) or 3000,
+    host = os.getenv("HOST") or "0.0.0.0",
+    env = "development",
+    debug = true,
+    
+    database = {
+        driver = "mysql",
+        host = os.getenv("DB_HOST") or "localhost",
+        port = tonumber(os.getenv("DB_PORT")) or 3306,
+        database = os.getenv("DB_NAME") or "crescent_db",
+        user = os.getenv("DB_USER") or "root",
+        password = os.getenv("DB_PASSWORD") or "",
+    }
+}
+]]
+    
+    write_file(project_name .. "/config/development.lua", config_content)
+    print_success("Criado: config/development.lua")
+    
+    -- Cria .gitignore
+    local gitignore_content = [[.env
+node_modules/
+*.log
+.DS_Store
+]]
+    
+    write_file(project_name .. "/.gitignore", gitignore_content)
+    print_success("Criado: .gitignore")
+    
+    -- Cria README.md
+    local readme_content = string.format([[# %s
+
+Projeto criado com Crescent Framework
+
+## Instalação
+
+```bash
+# Copie o arquivo de ambiente
+cp .env.example .env
+
+# Edite as configurações
+nano .env
+
+# Instale as dependências (se necessário)
+luarocks install crescent
+```
+
+## Executar
+
+```bash
+luvit app.lua
+```
+
+## Gerar código
+
+```bash
+# Criar um módulo completo
+luvit crescent-cli make:module User
+
+# Criar controller
+luvit crescent-cli make:controller Product
+
+# Criar migration
+luvit crescent-cli make:migration create_products_table
+```
+
+## Documentação
+
+https://crescent.tyne.com.br
+]], project_name)
+    
+    write_file(project_name .. "/README.md", readme_content)
+    print_success("Criado: README.md")
+    
+    -- Mensagem final
+    print_success("\n✨ Projeto criado com sucesso!")
+    print_info("\nPróximos passos:")
+    print(colors.yellow .. string.format([[
+  cd %s
+  cp .env.example .env
+  nano .env
+  luvit app.lua
+]], project_name) .. colors.reset)
+    
+    print_info("\nPara criar um módulo CRUD completo:")
+    print(colors.yellow .. string.format([[
+  cd %s
+  luvit crescent-cli make:module User
+]], project_name) .. colors.reset)
+end
+
 -- Help
 local function show_help()
     print_header("Crescent CLI - Gerador de Código")
@@ -509,6 +692,7 @@ Uso: luvit crescent-cli <comando> [opções]
 
 Comandos disponíveis:
 
+  new <nome>                        Cria um novo projeto Crescent
   make:controller <nome> [módulo]   Cria um controller
   make:service <nome> [módulo]      Cria um service
   make:model <nome> [módulo]        Cria um model
@@ -521,6 +705,7 @@ Comandos disponíveis:
 
 Exemplos:
 
+  luvit crescent-cli new meu-projeto
   luvit crescent-cli make:module User
   luvit crescent-cli make:controller Product
   luvit crescent-cli make:service Auth auth
@@ -540,7 +725,9 @@ local function main(args)
     local name = args[2]
     local module_name = args[3]
     
-    if command == "make:controller" and name then
+    if command == "new" and name then
+        commands.new(name)
+    elseif command == "make:controller" and name then
         commands.make.controller(name, module_name)
     elseif command == "make:service" and name then
         commands.make.service(name, module_name)
