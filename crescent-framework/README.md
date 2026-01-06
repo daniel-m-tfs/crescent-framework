@@ -119,10 +119,47 @@ Veja `crescent-starter/README.md` para:
 ## 📦 Requisitos
 
 - [Luvit](https://luvit.io/) v2.18+
+- [LuaRocks](https://luarocks.org/) para gerenciamento de pacotes
 - (Opcional) MySQL + luasql-mysql para database
 
-### Instalando MySQL Support
+### Instalação Automática (Recomendado)
 
+```bash
+# Instala TODAS as dependências automaticamente
+./install-dependencies.sh
+```
+
+Este script verifica e instala:
+- ✅ LuaRocks (se não estiver instalado)
+- ✅ Luvit (se não estiver instalado)
+- ✅ MySQL + luasql-mysql (opcional)
+- ✅ Dependências Lua adicionais (opcional)
+
+### Instalação Manual
+
+#### Luvit
+```bash
+# macOS
+brew install luvit
+
+# Linux - compile do source
+curl -L https://github.com/luvit/lit/raw/master/get-lit.sh | sh
+sudo mv lit luvit luvi /usr/local/bin/
+```
+
+#### LuaRocks
+```bash
+# macOS
+brew install luarocks
+
+# Ubuntu/Debian
+sudo apt-get install luarocks
+
+# Fedora
+sudo dnf install luarocks
+```
+
+#### MySQL Support (Opcional)
 ```bash
 # Método rápido
 ./install-mysql.sh

@@ -1,0 +1,27 @@
+# robots.txt for Crescent Framework Website
+
+User-agent: *
+Allow: /
+
+# Sitemap location
+Sitemap: https://crescentframework.dev/sitemap.xml
+
+# Disallow admin or config directories if any exist in the future
+Disallow: /admin/
+Disallow: /config/
+
+# Allow all major search engines
+User-agent: Googlebot
+Allow: /
+
+User-agent: Googlebot-Image
+Allow: /
+
+User-agent: Bingbot
+Allow: /
+
+User-agent: Slurp
+Allow: /
+
+# Crawl-delay for politeness (optional)
+Crawl-delay: 1

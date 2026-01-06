@@ -2,19 +2,54 @@
 
 Framework web modular e leve para Luvit.
 
-## 🚀 Quick Start
+## � Instalação
+
+### Método Automático (Recomendado)
 
 ```bash
-# 1. Configure variáveis de ambiente (opcional)
+# Instala todas as dependências necessárias
+./install-dependencies.sh
+```
+
+Este script instalará automaticamente:
+- ✅ **LuaRocks** - Gerenciador de pacotes Lua
+- ✅ **Luvit** - Runtime assíncrono
+- ✅ **MySQL + luasql-mysql** - Banco de dados (opcional)
+- ✅ **Dependências Lua** - Bibliotecas adicionais (opcional)
+
+### Método Manual
+
+Se preferir instalar manualmente:
+
+```bash
+# macOS
+brew install luvit luarocks
+
+# Linux (Ubuntu/Debian)
+sudo apt-get install luarocks
+curl -L https://github.com/luvit/lit/raw/master/get-lit.sh | sh
+sudo mv lit luvit luvi /usr/local/bin/
+
+# MySQL (opcional)
+./install-mysql.sh
+```
+
+## �🚀 Quick Start
+
+```bash
+# 1. Instale as dependências (se ainda não fez)
+./install-dependencies.sh
+
+# 2. Configure variáveis de ambiente (opcional)
 cp .env.example .env
 # Edite .env com suas configurações
 
-# 2. Inicie o servidor
+# 3. Inicie o servidor
 luvit app.lua
 # ✓ Módulo Hello carregado
 # 🌙 Crescent server listening on http://0.0.0.0:8080
 
-# 3. Teste a API
+# 4. Teste a API
 curl http://localhost:8080/hello
 curl -X POST http://localhost:8080/hello -H "Content-Type: application/json" -d '{"name":"Test"}'
 ```
