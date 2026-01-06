@@ -265,40 +265,49 @@ end
 
 templates.model = function(name, module_name)
     local class_name = capitalize(name)
+    local table_name = to_snake_case(name)
     return string.format([[-- src/%s/models/%s.lua
--- Model/Entity para %s
+-- Model para %s usando Active Record ORM
 
-local %s = {}
-%s.__index = %s
+local Model = require("crescent.database.model")
 
-function %s.new(data)
-    local self = setmetatable({}, %s)
-    self.id = data.id
-    self.created_at = data.created_at or os.time()
-    self.updated_at = data.updated_at
-    return self
-end
-
-function %s:validate()
-    -- Adicione validações aqui
-    if not self.id then
-        return false, "ID é obrigatório"
-    end
-    return true
-end
-
-function %s:toTable()
-    return {
-        id = self.id,
-        created_at = self.created_at,
-        updated_at = self.updated_at
+local %s = Model:extend({
+    table = "%s",
+    primary_key = "id",
+    timestamps = true,
+    soft_deletes = false,
+    
+    fillable = {
+        -- Adicione aqui os campos que podem ser preenchidos em massa
+        -- "name", "email", etc.
+    },
+    
+    hidden = {
+        -- Campos que não devem aparecer em JSON/serialização
+        -- "password", "token", etc.
+    },
+    
+    validates = {
+        -- Adicione validações aqui
+        -- name = {required = true, min = 3, max = 255},
+        -- email = {required = true, email = true, unique = true},
+    },
+    
+    relations = {
+        -- Defina relações aqui
+        -- posts = {type = "hasMany", model = "Post", foreign_key = "user_id"},
+        -- profile = {type = "hasOne", model = "Profile", foreign_key = "user_id"},
     }
-end
+})
+
+-- Métodos personalizados do model
+-- function %s:customMethod()
+--     -- Seu código aqui
+-- end
 
 return %s
-]], module_name, to_snake_case(name), name,
-    class_name, class_name, class_name,
-    class_name, class_name, class_name, class_name, class_name)
+]], module_name, table_name, class_name,
+    class_name, table_name, class_name, class_name)
 end
 
 templates.routes = function(name, module_name)

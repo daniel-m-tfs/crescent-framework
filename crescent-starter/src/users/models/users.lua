@@ -1,31 +1,40 @@
 -- src/users/models/users.lua
--- Model/Entity para Users
+-- Model para Users usando Active Record ORM
 
-local Users = {}
-Users.__index = Users
+local Model = require("crescent.database.model")
 
-function Users.new(data)
-    local self = setmetatable({}, Users)
-    self.id = data.id
-    self.created_at = data.created_at or os.time()
-    self.updated_at = data.updated_at
-    return self
-end
-
-function Users:validate()
-    -- Adicione validações aqui
-    if not self.id then
-        return false, "ID é obrigatório"
-    end
-    return true
-end
-
-function Users:toTable()
-    return {
-        id = self.id,
-        created_at = self.created_at,
-        updated_at = self.updated_at
+local Users = Model:extend({
+    table = "users",
+    primary_key = "id",
+    timestamps = true,
+    soft_deletes = false,
+    
+    fillable = {
+        -- Adicione aqui os campos que podem ser preenchidos em massa
+        -- "name", "email", etc.
+    },
+    
+    hidden = {
+        -- Campos que não devem aparecer em JSON/serialização
+        -- "password", "token", etc.
+    },
+    
+    validates = {
+        -- Adicione validações aqui
+        -- name = {required = true, min = 3, max = 255},
+        -- email = {required = true, email = true, unique = true},
+    },
+    
+    relations = {
+        -- Defina relações aqui
+        -- posts = {type = "hasMany", model = "Post", foreign_key = "user_id"},
+        -- profile = {type = "hasOne", model = "Profile", foreign_key = "user_id"},
     }
-end
+})
+
+-- Métodos personalizados do model
+-- function Users:customMethod()
+--     -- Seu código aqui
+-- end
 
 return Users
