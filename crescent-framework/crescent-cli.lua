@@ -61,6 +61,60 @@ end
 -- Templates
 local templates = {}
 
+templates.migration = function(name)
+    local timestamp = os.date("%Y%m%d%H%M%S")
+    local filename = timestamp .. "_" .. name .. ".lua"
+    
+    -- Extrai nome da tabela do padrão create_xxx_table ou add_xxx_to_yyy
+    local table_name = "example"
+    
+    -- Padrão: create_products_table -> products
+    if name:match("^create_(.+)_table$") then
+        table_name = name:match("^create_(.+)_table$")
+    -- Padrão: add_column_to_users -> users
+    elseif name:match("_to_(.+)$") then
+        table_name = name:match("_to_(.+)$")
+    -- Padrão: drop_products_table -> products
+    elseif name:match("^drop_(.+)_table$") then
+        table_name = name:match("^drop_(.+)_table$")
+    -- Padrão: update_products_table -> products
+    elseif name:match("^update_(.+)_table$") then
+        table_name = name:match("^update_(.+)_table$")
+    end
+    
+    local content = [[-- migrations/]] .. filename .. "\n" .. [[
+-- Migration: ]] .. name .. "\n\n" .. [[
+local Migration = {}
+
+-- Executa a migration (criar tabelas, adicionar colunas, etc)
+function Migration:up()
+    return ]].. "[[" .. [[
+
+        CREATE TABLE IF NOT EXISTS ]] .. table_name .. [[ (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            name VARCHAR(255) NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    ]] .. "]]" .. [[
+
+end
+
+-- Desfaz a migration (remover tabelas, colunas, etc)
+function Migration:down()
+    return ]] .. "[[" .. [[
+
+        DROP TABLE IF EXISTS ]] .. table_name .. [[;
+    ]] .. "]]" .. [[
+
+end
+
+return Migration
+]]
+    
+    return filename, content
+end
+
 templates.controller = function(name, module_name)
     local class_name = capitalize(name) .. "Controller"
     local service_name = to_snake_case(name)
@@ -394,6 +448,50 @@ local %sModule = require("src.%s")
 ]], module_name, module_name, module_name) .. colors.reset)
 end
 
+-- Migration commands
+commands.make.migration = function(name)
+    ensure_dir("migrations")
+    
+    local filename, content = templates.migration(name)
+    local filepath = "migrations/" .. filename
+    
+    if write_file(filepath, content) then
+        print_success("Migration criada: " .. filepath)
+        print_info("\nEdite o arquivo e implemente os métodos up() e down()")
+        print_info("Depois execute: luvit crescent-cli migrate")
+    else
+        print_error("Erro ao criar migration")
+    end
+end
+
+-- Migration commands
+commands.migrate = function()
+    local handle = io.popen("luvit crescent/database/migrate.lua migrate 2>&1")
+    if handle then
+        local output = handle:read("*a")
+        handle:close()
+        print(output)
+    end
+end
+
+commands.migrate_rollback = function()
+    local handle = io.popen("luvit crescent/database/migrate.lua rollback 2>&1")
+    if handle then
+        local output = handle:read("*a")
+        handle:close()
+        print(output)
+    end
+end
+
+commands.migrate_status = function()
+    local handle = io.popen("luvit crescent/database/migrate.lua status 2>&1")
+    if handle then
+        local output = handle:read("*a")
+        handle:close()
+        print(output)
+    end
+end
+
 -- Help
 local function show_help()
     print_header("Crescent CLI - Gerador de Código")
@@ -407,12 +505,18 @@ Comandos disponíveis:
   make:model <nome> [módulo]        Cria um model
   make:routes <nome> [módulo]       Cria arquivo de rotas
   make:module <nome>                Cria um módulo completo (CRUD)
+  make:migration <nome>             Cria uma migration
+  migrate                           Executa migrations pendentes
+  migrate:rollback                  Desfaz última migration
+  migrate:status                    Mostra status das migrations
 
 Exemplos:
 
   luvit crescent-cli make:module User
   luvit crescent-cli make:controller Product
   luvit crescent-cli make:service Auth auth
+  luvit crescent-cli make:migration create_products_table
+  luvit crescent-cli migrate
     ]])
 end
 
@@ -437,6 +541,14 @@ local function main(args)
         commands.make.routes(name, module_name)
     elseif command == "make:module" and name then
         commands.make.module(name)
+    elseif command == "make:migration" and name then
+        commands.make.migration(name)
+    elseif command == "migrate" then
+        commands.migrate()
+    elseif command == "migrate:rollback" then
+        commands.migrate_rollback()
+    elseif command == "migrate:status" then
+        commands.migrate_status()
     else
         show_help()
     end

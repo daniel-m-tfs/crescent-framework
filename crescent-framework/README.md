@@ -69,9 +69,11 @@ Crescent Framework/
 - ✅ CLI generator (Artisan-style)
 - ✅ Middleware stack (CORS, Logger, Security, Auth)
 - ✅ Roteamento com parâmetros
-- ✅ Query Builder (Laravel-inspired)
+- ✅ **MySQL Query Builder** (Laravel-inspired) com connection pooling
+- ✅ **Suporte a .env** para configurações sensíveis
 - ✅ Context API simples
-- ✅ Zero configuração
+- ✅ Fallback para mock (desenvolvimento sem banco)
+- ✅ Zero configuração inicial
 
 ## 🛠️ Desenvolvimento
 
@@ -108,9 +110,26 @@ Veja `crescent-starter/README.md` para:
 - Comandos CLI
 - Configuração
 
+**Veja `DATABASE.md` para:**
+- Instalação do driver MySQL
+- Configuração do banco de dados
+- Uso do Query Builder
+- API completa do database layer
+
 ## 📦 Requisitos
 
 - [Luvit](https://luvit.io/) v2.18+
+- (Opcional) MySQL + luasql-mysql para database
+
+### Instalando MySQL Support
+
+```bash
+# Método rápido
+./install-mysql.sh
+
+# Ou manual
+luarocks install luasql-mysql
+```
 
 ## 📄 Licença
 

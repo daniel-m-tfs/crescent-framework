@@ -1,6 +1,6 @@
 #!/bin/bash
 # sync-starter.sh
-# Script para sincronizar framework e regenerar módulo hello no crescent-starter
+# Script para sincronizar framework e regenerar módulo users no crescent-starter
 
 set -e  # Para em caso de erro
 
@@ -53,14 +53,21 @@ cp "$BASE_DIR/.env.example" "$STARTER_DIR/.env.example"
 echo -e "${GREEN}✓ .env.example copiado${NC}"
 echo ""
 
-echo -e "${BLUE}🗑️ Removendo módulo hello antigo...${NC}"
-rm -rf "$STARTER_DIR/src/hello"
-echo -e "${GREEN}✓ Módulo hello removido${NC}"
+echo -e "${BLUE}🔧 Copiando scripts de instalação...${NC}"
+cp "$BASE_DIR/install-mysql.sh" "$STARTER_DIR/install-mysql.sh"
+chmod +x "$STARTER_DIR/install-mysql.sh"
+cp "$BASE_DIR/test-mysql.lua" "$STARTER_DIR/test-mysql.lua"
+echo -e "${GREEN}✓ Scripts copiados${NC}"
 echo ""
 
-echo -e "${BLUE}🎨 Regenerando módulo hello...${NC}"
+echo -e "${BLUE}🗑️ Removendo módulo users antigo...${NC}"
+rm -rf "$STARTER_DIR/src/users"
+echo -e "${GREEN}✓ Módulo users removido${NC}"
+echo ""
+
+echo -e "${BLUE}🎨 Regenerando módulo users...${NC}"
 cd "$STARTER_DIR"
-luvit crescent-cli.lua make:module Hello
+luvit crescent-cli.lua make:module Users
 echo ""
 
 echo -e "${GREEN}✅ Sincronização completa!${NC}"
@@ -72,7 +79,9 @@ echo "  - Bootstrap (bootstrap.lua)"
 echo "  - Configurações (config/development.lua, config/production.lua)"
 echo "  - Deployment (config/nginx.conf, config/crescent.service)"
 echo "  - Ambiente (.env.example)"
-echo "  - Módulo Hello (src/hello/)"
+echo "  - Documentação (README.md, DATABASE.md, MYSQL_IMPLEMENTATION.md)"
+echo "  - Scripts (install-mysql.sh, test-mysql.lua)"
+echo "  - Módulo users (src/users/)"
 echo ""
 echo -e "${YELLOW}Para testar:${NC}"
 echo "  cd crescent-starter"

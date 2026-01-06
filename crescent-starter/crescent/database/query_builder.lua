@@ -4,6 +4,18 @@
 local QueryBuilder = {}
 QueryBuilder.__index = QueryBuilder
 
+-- MySQL Connection (opcional)
+local MySQL = nil
+local mysql_available = false
+local mysql_driver_available = false
+
+local ok = pcall(function()
+    MySQL = require("crescent.database.mysql")
+    mysql_available = true
+    -- Verifica se o driver está realmente disponível
+    mysql_driver_available = MySQL.isDriverAvailable and MySQL.isDriverAvailable() or false
+end)
+
 -- Cria nova instância
 function QueryBuilder.new()
     local self = setmetatable({}, QueryBuilder)
@@ -240,25 +252,36 @@ function QueryBuilder:_escapeValue(value)
     end
 end
 
--- Execução (mock - substitua com conexão real)
+-- Execução
 function QueryBuilder:get()
     local sql = self:toSql()
-    print("📊 SQL:", sql)
     
-    -- TODO: Executar SQL real aqui
-    -- local conn = getConnection()
-    -- return conn:execute(sql)
+    -- Se MySQL disponível E driver instalado, executa query real
+    if mysql_available and mysql_driver_available and MySQL then
+        local results, err = MySQL:query(sql)
+        if err then
+            print("❌ Erro MySQL:", err)
+            return nil, err
+        end
+        return results
+    end
     
+    -- Fallback: modo mock
+    print("⚠️  [MOCK] SQL:", sql)
     return {
-        sql = sql,
-        note = "Mock result - conecte um banco de dados real"
+        note = "Mock result - instale luasql-mysql para queries reais"
     }
 end
 
 function QueryBuilder:first()
     self:limit(1)
     local results = self:get()
-    return results[1]
+    
+    if not results then return nil end
+    if type(results) == "table" and #results > 0 then
+        return results[1]
+    end
+    return nil
 end
 
 function QueryBuilder:count()
@@ -283,14 +306,19 @@ function QueryBuilder:insert(data)
         table.concat(values, ", ")
     )
     
-    print("📊 SQL:", sql)
+    -- Se MySQL disponível E driver instalado, executa e retorna ID
+    if mysql_available and mysql_driver_available and MySQL then
+        local id, err = MySQL:insert(sql)
+        if err then
+            print("❌ Erro MySQL:", err)
+            return nil, err
+        end
+        return id
+    end
     
-    -- TODO: Executar e retornar ID
-    return {
-        sql = sql,
-        id = 1,
-        note = "Mock result"
-    }
+    -- Fallback: modo mock (retorna ID diretamente)
+    print("⚠️  [MOCK] SQL:", sql)
+    return 1  -- Retorna apenas o ID no modo mock
 end
 
 -- UPDATE
@@ -313,12 +341,21 @@ function QueryBuilder:update(data)
         end
     end
     
-    print("📊 SQL:", sql)
+    -- Se MySQL disponível E driver instalado, executa
+    if mysql_available and mysql_driver_available and MySQL then
+        local result, err = MySQL:update(sql)
+        if err then
+            print("❌ Erro MySQL:", err)
+            return nil, err
+        end
+        return result
+    end
     
+    -- Fallback: modo mock
+    print("⚠️  [MOCK] SQL:", sql)
     return {
-        sql = sql,
-        affected_rows = 1,
-        note = "Mock result"
+        affected = 1,
+        note = "Mock result - instale luasql-mysql"
     }
 end
 
@@ -335,12 +372,21 @@ function QueryBuilder:delete()
         end
     end
     
-    print("📊 SQL:", sql)
+    -- Se MySQL disponível E driver instalado, executa
+    if mysql_available and mysql_driver_available and MySQL then
+        local result, err = MySQL:delete(sql)
+        if err then
+            print("❌ Erro MySQL:", err)
+            return nil, err
+        end
+        return result
+    end
     
+    -- Fallback: modo mock
+    print("⚠️  [MOCK] SQL:", sql)
     return {
-        sql = sql,
-        affected_rows = 1,
-        note = "Mock result"
+        affected = 1,
+        note = "Mock result - instale luasql-mysql"
     }
 end
 

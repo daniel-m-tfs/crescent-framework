@@ -17,8 +17,8 @@ app:use(cors.create())
 app:use(security.headers())
 
 -- Registra módulos da aplicação
-local helloModule = require("src.hello")
-helloModule.register(app)
+local usersModule = require("src.users")
+usersModule.register(app)
 
 -- Rota de health check
 app:get("/health", function(ctx)
