@@ -501,6 +501,26 @@ commands.migrate_status = function()
     end
 end
 
+-- Command: server
+commands.server = function()
+    -- Verifica se app.lua existe
+    local f = io.open("app.lua", "r")
+    if not f then
+        print_error("app.lua não encontrado!")
+        print_info("Este comando deve ser executado na raiz do projeto.")
+        print_info("Certifique-se de que o arquivo app.lua existe.")
+        return
+    end
+    f:close()
+    
+    print_info("🚀 Iniciando servidor Crescent Framework...")
+    print_info("Rodando: luvit app.lua")
+    print_info("Pressione Ctrl+C para parar\n")
+    
+    -- Executa luvit app.lua
+    os.execute("luvit app.lua")
+end
+
 -- Command: new project
 commands.new = function(project_name)
     if not project_name or project_name == "" then
@@ -540,15 +560,15 @@ commands.new = function(project_name)
 -- app.lua
 -- Ponto de entrada da aplicação
 
-local Crescent = require('crescent')
+local Crescent = require('crescent-framework')
 local env = require('config.development')
 
 -- Cria aplicação
 local app = Crescent.new(env)
 
 -- Middleware
-app:use(require('crescent.middleware.logger'))
-app:use(require('crescent.middleware.cors'))
+app:use(require('crescent-framework.middleware.logger'))
+app:use(require('crescent-framework.middleware.cors'))
 
 -- Rotas básicas
 app:get('/', function(ctx)
@@ -563,7 +583,8 @@ app:get('/health', function(ctx)
     return ctx.json(200, { status = "ok" })
 end)
 
--- Exemplo de CRUD (descomente para usar)
+-- Registrar módulos aqui
+-- Exemplo:
 -- local usersModule = require("src.users")
 -- usersModule.register(app)
 
@@ -612,6 +633,28 @@ return {
     write_file(project_name .. "/config/development.lua", config_content)
     print_success("Criado: config/development.lua")
     
+    -- Cria config/production.lua
+    local production_config = [[-- config/production.lua
+return {
+    port = tonumber(os.getenv("PORT")) or 3000,
+    host = os.getenv("HOST") or "0.0.0.0",
+    env = "production",
+    debug = false,
+    
+    database = {
+        driver = "mysql",
+        host = os.getenv("DB_HOST") or "localhost",
+        port = tonumber(os.getenv("DB_PORT")) or 3306,
+        database = os.getenv("DB_NAME") or "crescent_db",
+        user = os.getenv("DB_USER") or "root",
+        password = os.getenv("DB_PASSWORD") or "",
+    }
+}
+]]
+    
+    write_file(project_name .. "/config/production.lua", production_config)
+    print_success("Criado: config/production.lua")
+    
     -- Cria .gitignore
     local gitignore_content = [[.env
 node_modules/
@@ -622,46 +665,256 @@ node_modules/
     write_file(project_name .. "/.gitignore", gitignore_content)
     print_success("Criado: .gitignore")
     
+    -- Cria config/nginx.conf
+    local nginx_config = [[# nginx.conf - Crescent Framework Production Setup
+# Coloque este arquivo em /etc/nginx/sites-available/crescent
+# Crie um symlink: ln -s /etc/nginx/sites-available/crescent /etc/nginx/sites-enabled/
+
+upstream crescent_backend {
+    server 127.0.0.1:3000;
+    # Para múltiplas instâncias, adicione mais servidores:
+    # server 127.0.0.1:3001;
+    # server 127.0.0.1:3002;
+}
+
+server {
+    listen 80;
+    server_name seu-dominio.com.br;
+    
+    # Redireciona HTTP para HTTPS
+    return 301 https://$server_name$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name seu-dominio.com.br;
+    
+    # Certificados SSL (use certbot para Let's Encrypt)
+    # ssl_certificate /etc/letsencrypt/live/seu-dominio.com.br/fullchain.pem;
+    # ssl_certificate_key /etc/letsencrypt/live/seu-dominio.com.br/privkey.pem;
+    
+    # Logs
+    access_log /var/log/nginx/crescent_access.log;
+    error_log /var/log/nginx/crescent_error.log;
+    
+    # Tamanho máximo de upload
+    client_max_body_size 100M;
+    
+    location / {
+        proxy_pass http://crescent_backend;
+        proxy_http_version 1.1;
+        
+        # Headers
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        
+        # WebSocket support
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        
+        # Timeouts
+        proxy_connect_timeout 60s;
+        proxy_send_timeout 60s;
+        proxy_read_timeout 60s;
+    }
+    
+    # Cache de arquivos estáticos (se você servir com Nginx)
+    location ~* \.(jpg|jpeg|png|gif|ico|css|js|svg|woff|woff2|ttf|eot)$ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+}
+]]
+    
+    write_file(project_name .. "/config/nginx.conf", nginx_config)
+    print_success("Criado: config/nginx.conf")
+    
+    -- Cria config/crescent.service (systemd)
+    local systemd_service = [[# crescent.service - Systemd Service for Crescent Framework
+# Coloque este arquivo em /etc/systemd/system/crescent.service
+# 
+# Comandos:
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable crescent
+#   sudo systemctl start crescent
+#   sudo systemctl status crescent
+
+[Unit]
+Description=Crescent Framework Application
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/crescent
+Environment="NODE_ENV=production"
+Environment="PORT=3000"
+
+# Comando para iniciar a aplicação
+ExecStart=/usr/local/bin/luvit /var/www/crescent/app.lua
+
+# Reiniciar automaticamente se cair
+Restart=always
+RestartSec=10
+
+# Logs
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=crescent
+
+# Limites de recursos
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target
+]]
+    
+    write_file(project_name .. "/config/crescent.service", systemd_service)
+    print_success("Criado: config/crescent.service")
+    
+    -- Cria deploy.sh
+    local deploy_script = [[#!/bin/bash
+# deploy.sh - Script de deploy para Crescent Framework
+
+set -e
+
+echo "🚀 Iniciando deploy do Crescent Framework..."
+
+# Variáveis
+APP_DIR="/var/www/crescent"
+SERVICE_NAME="crescent"
+
+# 1. Atualizar código
+echo "📦 Atualizando código..."
+cd "$APP_DIR"
+git pull origin main
+
+# 2. Instalar dependências
+echo "📚 Instalando dependências..."
+luarocks install crescent-framework
+
+# 3. Rodar migrations
+echo "🗄️  Executando migrations..."
+luvit bootstrap.lua migrate
+
+# 4. Reiniciar serviço
+echo "🔄 Reiniciando aplicação..."
+sudo systemctl restart "$SERVICE_NAME"
+
+# 5. Verificar status
+echo "✅ Verificando status..."
+sudo systemctl status "$SERVICE_NAME" --no-pager
+
+echo "✨ Deploy concluído com sucesso!"
+]]
+    
+    write_file(project_name .. "/deploy.sh", deploy_script)
+    print_success("Criado: deploy.sh")
+    
     -- Cria README.md
     local readme_content = string.format([[# %s
 
-Projeto criado com Crescent Framework
+Aplicação construída com [Crescent Framework](https://github.com/daniel-m-tfs/crescent-framework).
 
-## Instalação
+## 🚀 Começando
+
+### Pré-requisitos
+- Luvit instalado
+- LuaRocks instalado
+
+### Instalação
 
 ```bash
-# Copie o arquivo de ambiente
-cp .env.example .env
-
-# Edite as configurações
-nano .env
-
-# Instale as dependências (se necessário)
-luarocks install crescent
+# Instalar dependências
+luarocks install crescent-framework
 ```
 
-## Executar
+### Desenvolvimento
 
 ```bash
+# Iniciar servidor
+crescent server
+
+# Ou diretamente:
 luvit app.lua
 ```
 
-## Gerar código
+### Migrations
 
 ```bash
-# Criar um módulo completo
-luvit crescent-cli make:module User
+# Criar nova migration
+crescent make:migration create_users_table
 
-# Criar controller
-luvit crescent-cli make:controller Product
+# Executar migrations
+luvit bootstrap.lua migrate
 
-# Criar migration
-luvit crescent-cli make:migration create_products_table
+# Reverter última migration
+luvit bootstrap.lua rollback
 ```
 
-## Documentação
+### Generators
 
-https://crescent.tyne.com.br
+```bash
+# Criar módulo completo (model, controller, routes)
+crescent make:module User
+
+# Criar apenas controller
+crescent make:controller UserController
+
+# Criar apenas model
+crescent make:model User
+
+# Criar apenas service
+crescent make:service UserService
+```
+
+## 📦 Deploy
+
+### Nginx + Systemd
+
+1. Copiar arquivos de configuração:
+```bash
+sudo cp config/nginx.conf /etc/nginx/sites-available/crescent
+sudo ln -s /etc/nginx/sites-available/crescent /etc/nginx/sites-enabled/
+sudo cp config/crescent.service /etc/systemd/system/
+```
+
+2. Configurar SSL com Let's Encrypt:
+```bash
+sudo certbot --nginx -d seu-dominio.com.br
+```
+
+3. Iniciar serviço:
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable crescent
+sudo systemctl start crescent
+```
+
+4. Verificar status:
+```bash
+sudo systemctl status crescent
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+### Deploy Automatizado
+
+Use o script de deploy:
+```bash
+chmod +x deploy.sh
+./deploy.sh
+```
+
+## 📖 Documentação
+
+Acesse a documentação completa: https://crescent.tyne.com.br
+
+## 📄 Licença
+
+MIT
 ]], project_name)
     
     write_file(project_name .. "/README.md", readme_content)
@@ -693,6 +946,7 @@ Uso: luvit crescent-cli <comando> [opções]
 Comandos disponíveis:
 
   new <nome>                        Cria um novo projeto Crescent
+  server                            Inicia o servidor (luvit app.lua)
   make:controller <nome> [módulo]   Cria um controller
   make:service <nome> [módulo]      Cria um service
   make:model <nome> [módulo]        Cria um model
@@ -706,6 +960,7 @@ Comandos disponíveis:
 Exemplos:
 
   luvit crescent-cli new meu-projeto
+  luvit crescent-cli server
   luvit crescent-cli make:module User
   luvit crescent-cli make:controller Product
   luvit crescent-cli make:service Auth auth
@@ -727,6 +982,8 @@ local function main(args)
     
     if command == "new" and name then
         commands.new(name)
+    elseif command == "server" then
+        commands.server()
     elseif command == "make:controller" and name then
         commands.make.controller(name, module_name)
     elseif command == "make:service" and name then
