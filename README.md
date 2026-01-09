@@ -1,16 +1,20 @@
 # 🌙 Crescent Framework
 
+![Crescent Logo](crescent-logo-semfundo.png)
+
 A modern, fast and elegant web framework for Luvit.
 
-[![LuaRocks](https://img.shields.io/badge/LuaRocks-crescent-blue)](https://luarocks.org/modules/crescent)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![Luvit](https://img.shields.io/badge/luvit-2.18+-blue)](https://luvit.io)
 
 ## ⚡ Quick Start
 
 ```bash
-# Install
-luarocks install crescent-framework
-lit install creationix/mysql
+# Install Luvit (if not already installed)
+curl -L https://github.com/luvit/lit/raw/master/get-lit.sh | sh
+
+# Install Crescent Framework
+lit install daniel-m-tfs/crescent-framework
 
 # Create new project
 crescent new myapp
@@ -18,17 +22,11 @@ cd myapp
 
 # Configure
 cp .env.example .env
+nano .env
 
 # Run
-luvit app.lua
-```
-
-Or use our starter template:
-
-```bash
-git clone https://github.com/daniel-m-tfs/crescent-starter.git myapp
-cd myapp
-lit install creationix/mysql
+crescent server
+# or
 luvit app.lua
 ```
 
@@ -49,11 +47,13 @@ Server running at `http://localhost:3000` 🚀
 ## 💻 CLI Commands
 
 ```bash
-crescent new <name>              # Create new project
+crescent new <name>              # Create new project from GitHub template
+crescent server                  # Start development server
 crescent make:module <name>      # Create complete CRUD module
 crescent make:controller <name>  # Create controller
 crescent make:service <name>     # Create service
 crescent make:model <name>       # Create Active Record model
+crescent make:routes <name>      # Create routes file
 crescent make:migration <name>   # Create migration
 crescent migrate                 # Run pending migrations
 crescent migrate:rollback        # Rollback last migration
@@ -64,36 +64,57 @@ crescent migrate:status          # Show migration status
 
 - **Installation Guide:** [INSTALLATION.md](INSTALLATION.md)
 - **Database Guide:** [DATABASE.md](DATABASE.md)
+- **Security Guide:** [SECURITY.md](SECURITY.md)
 - **Website:** https://crescent.tyne.com.br
 - **Starter Template:** https://github.com/daniel-m-tfs/crescent-starter
 
 ## 🔧 Requirements
 
-- **Luvit** >= 2.0
+- **Luvit** >= 2.18
+- **Lit** (package manager, comes with Luvit)
+- **Git** (for creating new projects)
 - **MySQL** (optional, for database features)
-- **LuaRocks** (for installation)
 
 ### Install Luvit
 
 ```bash
-# macOS
-brew install luvit
-
-# Linux
+# macOS / Linux / WSL
 curl -L https://github.com/luvit/lit/raw/master/get-lit.sh | sh
+
+# Or via Homebrew (macOS)
+brew install luvit
 ```
+
+This installs both `luvit` and `lit` (the package manager).
 
 ## 📦 Installation
 
+### Option 1: Via Lit (Recommended)
+
 ```bash
 # Install Crescent Framework
-luarocks install crescent-framework
+lit install daniel-m-tfs/crescent-framework
 
-# Install MySQL support (via lit, not luarocks!)
+# Install MySQL support (optional)
 lit install creationix/mysql
+
+# The 'crescent' command will be available globally
+crescent --help
 ```
 
-**Important:** Crescent uses Luvit, not standard Lua. MySQL must be installed via `lit` (creationix/mysql), not via luarocks (luasql-mysql).
+### Option 2: From Source (Development)
+
+```bash
+# Clone the repository
+git clone https://github.com/daniel-m-tfs/crescent-framework.git
+cd crescent-framework
+
+# Add to PATH (optional)
+export PATH="$PATH:$(pwd)/bin"
+
+# Test
+luvit crescent-cli.lua --help
+```
 
 ## 📁 Project Structure
 

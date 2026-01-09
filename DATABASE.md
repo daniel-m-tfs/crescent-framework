@@ -291,10 +291,10 @@ sudo apt-get install mysql-server libmysqlclient-dev
 sudo dnf install mysql-server mysql-devel
 ```
 
-#### 2. Instale o driver Lua
+#### 2. Instale o driver MySQL via Lit
 
 ```bash
-luarocks install luasql-mysql
+lit install creationix/mysql
 ```
 
 #### 3. Configure o .env
@@ -320,11 +320,11 @@ luvit test-mysql.lua
 
 ### ⚠️ Sobre Incluir o Driver no Projeto
 
-**Não é possível** incluir `luasql-mysql` diretamente em `/crescent/database/` porque:
+**Não é possível** incluir o driver MySQL diretamente em `/crescent/database/` porque:
 
 1. **É código C compilado** - Precisa ser compilado para cada SO/arquitetura
 2. **Depende de bibliotecas nativas** - Requer `libmysqlclient` instalada no sistema
-3. **LuaRocks gerencia dependências** - Melhor forma de instalar bibliotecas C
+3. **Lit gerencia dependências** - Melhor forma de instalar bibliotecas via `lit install`
 
 **Bibliotecas Lua puras** (100% Lua) podem ser incluídas, mas drivers de banco raramente são.
 
@@ -442,17 +442,17 @@ return UserService
 
 ## 🔧 Modo Fallback (Sem Driver)
 
-Se o `luasql-mysql` não estiver instalado, o framework funciona em **modo mock**:
+Se o driver MySQL não estiver instalado, o framework funciona em **modo mock**:
 
 ```lua
 local users = DB.table("users"):where("active", true):get()
 
 -- Console output:
--- ⚠️  Driver MySQL não encontrado (luasql-mysql)
---    Execute: luarocks install luasql-mysql
+-- ⚠️  Driver MySQL não encontrado
+--    Execute: lit install creationix/mysql
 -- ⚠️  [MOCK] SQL: SELECT * FROM users WHERE active = 1
 
--- Retorna: { note = "Mock result - instale luasql-mysql" }
+-- Retorna: { note = "Mock result - instale o driver MySQL" }
 ```
 
 Isso permite desenvolver a aplicação **sem ter MySQL instalado**, e depois integrar o banco quando necessário.
@@ -702,7 +702,7 @@ MySQL.closeAll()
 ✅ **Fallback para mock** (desenvolvimento sem DB)  
 ✅ **Escape automático** de valores  
 ✅ **Fácil integração** com Services/Controllers  
-✅ **Driver externo** (luasql-mysql via LuaRocks)  
+✅ **Driver externo** (creationix/mysql via Lit)  
 
 ### O que NÃO é:
 

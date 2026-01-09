@@ -6,6 +6,46 @@ local headers_utils = require("crescent.utils.headers")
 
 local M = {}
 
+-- Serializa Model(s) para array
+local function serialize_data(obj)
+    -- Se é um Model individual com método toArray
+    if type(obj) == "table" and type(obj.toArray) == "function" then
+        return obj:toArray()
+    end
+    
+    -- Se é um array/table
+    if type(obj) == "table" then
+        local result = {}
+        local is_array = false
+        
+        -- Verifica se é array (tem índices numéricos sequenciais)
+        if #obj > 0 then
+            is_array = true
+            for i, item in ipairs(obj) do
+                if type(item) == "table" and type(item.toArray) == "function" then
+                    result[i] = item:toArray()
+                else
+                    result[i] = item
+                end
+            end
+        else
+            -- É um objeto/hash
+            for k, v in pairs(obj) do
+                if type(v) == "table" and type(v.toArray) == "function" then
+                    result[k] = v:toArray()
+                else
+                    result[k] = v
+                end
+            end
+        end
+        
+        return result
+    end
+    
+    -- Retorna como está (primitivos)
+    return obj
+end
+
 -- Envia resposta JSON
 function M.json(res, status, obj, extra_headers)
     if res.finished then return end
@@ -23,7 +63,10 @@ function M.json(res, status, obj, extra_headers)
     
     res:writeHead(status or 200)
     
-    local ok, encoded = pcall(json.stringify, obj)
+    -- Serializa Models automaticamente
+    local serialized = serialize_data(obj)
+    
+    local ok, encoded = pcall(json.stringify, serialized)
     if ok then
         res:finish(encoded)
     else

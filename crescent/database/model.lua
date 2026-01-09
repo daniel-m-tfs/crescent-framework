@@ -106,6 +106,11 @@ function Model:where(column, operator, value)
     return self:query():where(column, operator, value)
 end
 
+-- Executa query SQL raw (retorna resultados brutos, não instâncias do Model)
+function Model:raw(sql, bindings)
+    return QueryBuilder.raw(sql, bindings)
+end
+
 -- ==========================
 -- CRUD METHODS (Instance)
 -- ==========================
@@ -499,6 +504,45 @@ function Model:_copyTable(t)
         copy[k] = v
     end
     return copy
+end
+
+-- ==========================
+-- SERIALIZATION
+-- ==========================
+
+-- Converte o model para array/table (remove propriedades internas)
+function Model:toArray()
+    local data = {}
+    
+    -- Copia todos os atributos
+    for k, v in pairs(self._attributes) do
+        -- Verifica se não está em hidden
+        local is_hidden = false
+        if self._hidden and #self._hidden > 0 then
+            for _, hidden_field in ipairs(self._hidden) do
+                if k == hidden_field then
+                    is_hidden = true
+                    break
+                end
+            end
+        end
+        
+        if not is_hidden then
+            -- Se for um Model nested, converte também
+            if type(v) == "table" and v.toArray then
+                data[k] = v:toArray()
+            else
+                data[k] = v
+            end
+        end
+    end
+    
+    return data
+end
+
+-- Alias para toArray (convenção)
+function Model:toJSON()
+    return self:toArray()
 end
 
 return Model

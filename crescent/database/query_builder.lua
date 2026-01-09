@@ -1,5 +1,27 @@
 -- crescent/database/query_builder.lua
 -- Query Builder simples inspirado no Laravel/Eloquent
+--
+-- PROTEÇÃO SQL INJECTION:
+-- - Valores: Escapados automaticamente via _escapeValue() 
+-- - Identificadores (tabelas/colunas): Validados via _validateIdentifier()
+-- - IMPORTANTE: Para queries raw, SEMPRE use bindings com placeholders (?)
+--
+-- EXEMPLOS DE USO:
+--
+-- 1. QueryBuilder básico:
+--    local QB = require("crescent.database.query_builder")
+--    local users = QB.table("users"):where("age", ">", 18):get()
+--
+-- 2. Query raw COM BINDINGS (SEGURO):
+--    local results = QB.raw("SELECT * FROM users WHERE name = ? AND age > ?", {"Sara", 18})
+--
+-- 3. Query raw SEM bindings (EVITE - só use para queries fixas):
+--    local results = QB.raw("SELECT COUNT(*) as total FROM users")
+--
+-- 4. Através do Model:
+--    local User = require("src.users.models.users")
+--    local users = User:query():where("status", "active"):orderBy("name"):get()
+--    local custom = User:raw("SELECT * FROM users WHERE name LIKE ?", {"%Sara%"})
 
 local QueryBuilder = {}
 QueryBuilder.__index = QueryBuilder
@@ -31,7 +53,7 @@ end
 
 -- Define tabela
 function QueryBuilder:table(table_name)
-    self._table = table_name
+    self._table = self:_validateIdentifier(table_name)
     return self
 end
 
@@ -237,19 +259,38 @@ function QueryBuilder:toSql()
     return sql
 end
 
--- Escape de valores (básico)
+-- Escape de valores (proteção SQL Injection)
 function QueryBuilder:_escapeValue(value)
     if type(value) == "string" then
-        return "'" .. value:gsub("'", "''") .. "'"
+        -- Escape de aspas simples (duplicar) e backslashes
+        local escaped = value:gsub("\\", "\\\\"):gsub("'", "''")
+        -- Remove caracteres nulos que podem causar problemas
+        escaped = escaped:gsub("\0", "")
+        return "'" .. escaped .. "'"
     elseif type(value) == "number" then
+        -- Valida que é realmente um número
+        if value ~= value then -- NaN check
+            return "NULL"
+        end
         return tostring(value)
     elseif type(value) == "boolean" then
         return value and "1" or "0"
     elseif value == nil then
         return "NULL"
     else
-        return "'" .. tostring(value) .. "'"
+        -- Fallback: converte para string e escapa
+        local str = tostring(value):gsub("\\", "\\\\"):gsub("'", "''"):gsub("\0", "")
+        return "'" .. str .. "'"
     end
+end
+
+-- Valida nome de tabela/coluna (previne SQL Injection em identificadores)
+function QueryBuilder:_validateIdentifier(identifier)
+    -- Permite apenas letras, números, underscore e ponto
+    if not identifier:match("^[a-zA-Z0-9_.]+$") then
+        error("Invalid identifier: " .. identifier .. " (only alphanumeric, underscore and dot allowed)")
+    end
+    return identifier
 end
 
 -- Execução
@@ -397,12 +438,52 @@ function M.table(table_name)
     return QueryBuilder.new():table(table_name)
 end
 
-function M.raw(sql)
-    print("📊 SQL (raw):", sql)
+-- Executa query SQL raw (com prepared statements quando possível)
+function M.raw(sql, bindings)
+    bindings = bindings or {}
+    
+    -- Se MySQL disponível E driver instalado, executa query real
+    if mysql_available and mysql_driver_available and MySQL then
+        -- Se tiver bindings, substitui placeholders ? pelos valores escapados
+        if #bindings > 0 then
+            local qb = QueryBuilder.new()
+            local escaped_values = {}
+            for _, value in ipairs(bindings) do
+                table.insert(escaped_values, qb:_escapeValue(value))
+            end
+            
+            -- Substitui ? pelos valores escapados
+            local i = 1
+            sql = sql:gsub("%?", function()
+                local val = escaped_values[i]
+                i = i + 1
+                return val or "NULL"
+            end)
+        end
+        
+        local results, err = MySQL:query(sql)
+        if err then
+            print("❌ Erro MySQL (raw):", err)
+            return nil, err
+        end
+        return results
+    end
+    
+    -- Fallback: modo mock
+    print("⚠️  [MOCK] SQL (raw):", sql)
+    if #bindings > 0 then
+        print("⚠️  [MOCK] Bindings:", table.concat(bindings, ", "))
+    end
     return {
         sql = sql,
-        note = "Raw query - mock result"
+        bindings = bindings,
+        note = "Mock result - instale luasql-mysql para queries reais"
     }
+end
+
+-- Alias para raw (convenção)
+function M.query(sql, bindings)
+    return M.raw(sql, bindings)
 end
 
 return M

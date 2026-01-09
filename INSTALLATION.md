@@ -1,57 +1,237 @@
-# 🚀 Guia de Instalação Rápida - Crescent Framework
+# 🚀 Guia de Instalação - Crescent Framework
 
-Este guia irá ajudá-lo a instalar todas as dependências necessárias para executar o Crescent Framework.
+Este guia irá ajudá-lo a instalar o Crescent Framework usando apenas **Luvit** e **Lit**.
 
 ## 📋 Dependências Necessárias
 
-- **LuaRocks** - Gerenciador de pacotes Lua
-- **Luvit** - Runtime assíncrono baseado em LuaJIT
+- **Luvit** >= 2.18 - Runtime assíncrono baseado em LuaJIT
+- **Lit** - Gerenciador de pacotes (vem com Luvit)
+- **Git** - Para clonar projetos
 - **MySQL** (opcional) - Banco de dados
-- **luasql-mysql** (opcional) - Driver MySQL para Lua
 
-## ⚡ Instalação Automática (Recomendado)
+## ⚡ Instalação Rápida
 
-Execute o script de instalação que verifica e instala todas as dependências:
+### 1. Instalar Luvit
+
+#### macOS / Linux / WSL
 
 ```bash
-./install-dependencies.sh
+# Método 1: Script oficial (recomendado)
+curl -L https://github.com/luvit/lit/raw/master/get-lit.sh | sh
+
+# Método 2: Homebrew (macOS)
+brew install luvit
 ```
 
-### O que o script faz?
+Isso instalará:
+- `luvit` - Runtime Lua assíncrono
+- `lit` - Gerenciador de pacotes
+- `luvi` - Runtime base
 
-1. **Detecta seu sistema operacional** (macOS ou Linux)
-2. **Verifica dependências instaladas**
-3. **Instala o que está faltando:**
-   - LuaRocks (se necessário)
-   - Luvit (se necessário)
-   - MySQL + luasql-mysql (se você optar)
-   - Dependências Lua adicionais (opcional)
+#### Verificar Instalação
 
-### Interativo e Seguro
+```bash
+luvit --version  # deve mostrar 2.18+
+lit --version    # deve funcionar
+```
 
-O script pergunta antes de instalar cada componente:
-- ✅ Você controla o que será instalado
-- ✅ Pode pular MySQL se não precisar
-- ✅ Mostra progresso e erros claramente
+### 2. Instalar Crescent Framework
 
-## 🔧 Instalação Manual
+```bash
+# Instalar via Lit
+lit install daniel-m-tfs/crescent-framework
 
-Se preferir instalar manualmente ou o script automático falhar:
+# O comando 'crescent' agora está disponível
+crescent --help
+```
 
-### 1. Instalar LuaRocks
+### 3. Instalar MySQL (Opcional)
+
+Se você vai usar banco de dados:
+
+```bash
+# Instalar MySQL support via Lit
+lit install creationix/mysql
+```
+
+## 🔧 Instalação Manual (Desenvolvimento)
+
+Se você quer desenvolver o framework ou contribuir:
+
+```bash
+# Clonar repositório
+git clone https://github.com/daniel-m-tfs/crescent-framework.git
+cd crescent-framework
+
+# Adicionar ao PATH (opcional)
+export PATH="$PATH:$(pwd)/bin"
+
+# Testar
+luvit crescent-cli.lua --help
+```
+
+## � Criar Novo Projeto
+
+```bash
+# Criar novo projeto
+crescent new meu-projeto
+
+# Entrar no projeto
+cd meu-projeto
+
+# Configurar .env
+cp .env.example .env
+nano .env
+
+# Iniciar servidor
+crescent server
+# ou
+luvit app.lua
+```
+
+## 🗄️ Configurar MySQL (Opcional)
+
+Se você vai usar o banco de dados:
+
+### 1. Instalar MySQL
 
 #### macOS
 ```bash
-brew install luarocks
+brew install mysql
+brew services start mysql
 ```
 
 #### Ubuntu/Debian
 ```bash
 sudo apt-get update
-sudo apt-get install -y luarocks
+sudo apt-get install mysql-server
+sudo systemctl start mysql
 ```
 
-#### Fedora/RHEL
+### 2. Criar Banco de Dados
+
+```bash
+# Acessar MySQL
+mysql -u root -p
+
+# Criar banco e usuário
+CREATE DATABASE crescent_db;
+CREATE USER 'crescent'@'localhost' IDENTIFIED BY 'senha_segura';
+GRANT ALL PRIVILEGES ON crescent_db.* TO 'crescent'@'localhost';
+FLUSH PRIVILEGES;
+EXIT;
+```
+
+### 3. Configurar .env
+
+```bash
+# Edite o arquivo .env no seu projeto
+DB_HOST=localhost
+DB_PORT=3306
+DB_NAME=crescent_db
+DB_USER=crescent
+DB_PASSWORD=senha_segura
+```
+
+### 4. Instalar Driver MySQL
+
+```bash
+# Instalar via Lit
+lit install creationix/mysql
+```
+
+## ✅ Verificar Instalação
+
+```bash
+# Verificar Luvit
+luvit --version
+
+# Verificar Lit
+lit --version
+
+# Verificar Crescent
+crescent --help
+
+# Testar criação de projeto
+crescent new test-project
+cd test-project
+crescent server
+```
+
+Se tudo funcionar, você verá:
+```
+🌙 Iniciando Servidor Crescent
+
+ℹ Iniciando aplicação...
+
+🌙 Crescent Server
+🚀 Servidor rodando em http://0.0.0.0:3000
+📁 Ambiente: development
+```
+
+## 🐛 Troubleshooting
+
+### "crescent: command not found"
+
+O comando `crescent` não está no PATH. Soluções:
+
+```bash
+# Opção 1: Usar caminho completo do lit
+~/.lit/bin/crescent --help
+
+# Opção 2: Adicionar ao PATH
+export PATH="$PATH:$HOME/.lit/bin"
+echo 'export PATH="$PATH:$HOME/.lit/bin"' >> ~/.bashrc  # ou ~/.zshrc
+
+# Opção 3: Usar via luvit diretamente
+luvit crescent-cli.lua --help
+```
+
+### "module 'mysql' not found"
+
+O driver MySQL não está instalado:
+
+```bash
+lit install creationix/mysql
+```
+
+### Erro de conexão com MySQL
+
+Verifique:
+1. MySQL está rodando: `brew services list` (macOS) ou `systemctl status mysql` (Linux)
+2. Credenciais no `.env` estão corretas
+3. Usuário tem permissões: veja seção "Criar Banco de Dados"
+
+### Luvit não encontrado
+
+```bash
+# Reinstalar via script oficial
+curl -L https://github.com/luvit/lit/raw/master/get-lit.sh | sh
+
+# Ou via Homebrew (macOS)
+brew install luvit
+```
+
+## 📚 Próximos Passos
+
+- 📖 Leia o [README.md](README.md) para entender os conceitos
+- 🗄️ Veja [DATABASE.md](DATABASE.md) para trabalhar com banco de dados
+- 🔒 Confira [SECURITY.md](SECURITY.md) para boas práticas de segurança
+- 🌐 Visite https://crescent.tyne.com.br para documentação completa
+
+## 💡 Dicas
+
+1. **Use o comando `crescent server`** ao invés de `luvit app.lua` para iniciar o servidor
+2. **Crie módulos completos** com `crescent make:module User` para agilizar o desenvolvimento
+3. **Use migrations** para controlar versões do banco de dados
+4. **Consulte `crescent --help`** para ver todos os comandos disponíveis
+
+## 🤝 Suporte
+
+- Issues: https://github.com/daniel-m-tfs/crescent-framework/issues
+- Discussões: https://github.com/daniel-m-tfs/crescent-framework/discussions
+- Website: https://crescent.tyne.com.br
+
 ```bash
 sudo dnf install -y luarocks
 ```

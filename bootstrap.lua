@@ -1,10 +1,20 @@
 -- bootstrap.lua (na raiz do projeto)
-local path = require("path")
 
+-- Função para obter diretório do arquivo
 local function this_dir()
   local src = debug.getinfo(1, "S").source
   if src:sub(1, 1) == "@" then src = src:sub(2) end
-  return path.dirname(src)
+  -- Remove o nome do arquivo para obter apenas o diretório
+  return src:match("(.*/)")  or "./"
+end
+
+-- Função para join paths (alternativa ao path.join)
+local function path_join(...)
+  local parts = {...}
+  local result = table.concat(parts, "/")
+  -- Remove barras duplicadas
+  result = result:gsub("//+", "/")
+  return result
 end
 
 local root = this_dir()
@@ -13,8 +23,8 @@ local root = this_dir()
 if not package.__crescent_bootstrapped then
   -- Paths do projeto
   package.path =
-    path.join(root, "?.lua") .. ";" ..
-    path.join(root, "?/init.lua") .. ";" ..
+    path_join(root, "?.lua") .. ";" ..
+    path_join(root, "?/init.lua") .. ";" ..
     package.path
   
   -- Adiciona LuaRocks paths para Lua 5.1 (LuaJIT)
@@ -22,12 +32,12 @@ if not package.__crescent_bootstrapped then
   if home then
     -- Path para módulos Lua (.lua)
     package.path = package.path .. ";" ..
-      path.join(home, ".luarocks/share/lua/5.1/?.lua") .. ";" ..
-      path.join(home, ".luarocks/share/lua/5.1/?/init.lua")
+      path_join(home, ".luarocks/share/lua/5.1/?.lua") .. ";" ..
+      path_join(home, ".luarocks/share/lua/5.1/?/init.lua")
     
     -- Path para módulos C (.so)
     package.cpath = package.cpath .. ";" ..
-      path.join(home, ".luarocks/lib/lua/5.1/?.so")
+      path_join(home, ".luarocks/lib/lua/5.1/?.so")
   end
   
   -- Paths globais do Homebrew (se existir)
@@ -35,8 +45,12 @@ if not package.__crescent_bootstrapped then
 
   package.__crescent_bootstrapped = true
 end
--- Pré-carrega módulos do Luvit
-_G._http = require("http")
-_G._url = require("url")
-_G._querystring = require("querystring")
-_G._json = require("json")
+
+-- Pré-carrega módulos do Luvit (se disponíveis)
+local success, http = pcall(require, "http")
+if success then
+  _G._http = http
+  _G._url = require("url")
+  _G._querystring = require("querystring")
+  _G._json = require("json")
+end

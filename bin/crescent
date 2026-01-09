@@ -1,18 +1,16 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Crescent CLI wrapper
 # This script wraps the luvit command to make CLI usage easier
 
-# Find the crescent-cli.lua file in luarocks installation
+# Determina o diretório onde o script está instalado
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PARENT_DIR="$(dirname "$SCRIPT_DIR")"
+
+# Procura pelo crescent-cli.lua
 CLI_LOCATIONS=(
-    "$HOME/.luarocks/share/lua/5.4/crescent-cli.lua"
-    "$HOME/.luarocks/share/lua/5.3/crescent-cli.lua"
-    "$HOME/.luarocks/share/lua/5.1/crescent-cli.lua"
-    "/opt/homebrew/share/lua/5.4/crescent-cli.lua"
-    "/opt/homebrew/share/lua/5.3/crescent-cli.lua"
-    "/opt/homebrew/share/lua/5.1/crescent-cli.lua"
-    "/usr/local/share/lua/5.4/crescent-cli.lua"
-    "/usr/local/share/lua/5.1/crescent-cli.lua"
-    "./crescent-cli.lua"
+    "$PARENT_DIR/crescent-cli.lua"           # Instalado via lit
+    "$SCRIPT_DIR/../crescent-cli.lua"        # Desenvolvimento
+    "./crescent-cli.lua"                      # Diretório atual
 )
 
 CLI_PATH=""
