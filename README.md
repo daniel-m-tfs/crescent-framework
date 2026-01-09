@@ -89,7 +89,27 @@ This installs both `luvit` and `lit` (the package manager).
 
 ## 📦 Installation
 
-### Option 1: Via Lit (Recommended)
+### Option 1: Create New Project (Recommended)
+
+The easiest way to start is using the starter template:
+
+```bash
+# Clone the starter template
+git clone https://github.com/daniel-m-tfs/crescent-starter.git myapp
+cd myapp
+
+# Install dependencies
+lit install
+
+# Install CLI globally (optional, for `crescent` commands)
+./install-cli.sh
+
+# Configure and run
+cp .env.example .env
+luvit app.lua
+```
+
+### Option 2: Add to Existing Project
 
 ```bash
 # Install Crescent Framework
@@ -97,6 +117,10 @@ lit install daniel-m-tfs/crescent-framework
 
 # Install MySQL support (optional)
 lit install creationix/mysql
+
+# Install CLI globally (requires framework source)
+cd deps/crescent-framework
+./install.sh
 
 # The 'crescent' command will be available globally
 crescent --help
