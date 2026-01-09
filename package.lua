@@ -1,6 +1,6 @@
 return {
   name = "daniel-m-tfs/crescent-framework",
-  version = "1.0.0",
+  version = "1.0.1",
   description = "A modern, fast and elegant web framework for Luvit",
   tags = { "web", "framework", "http", "server", "orm", "mvc" },
   author = "Daniel M <daniel@tyne.com.br>",
