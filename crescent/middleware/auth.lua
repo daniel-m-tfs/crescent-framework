@@ -1,6 +1,9 @@
 -- crescent/middleware/auth.lua
 -- Middlewares de autenticação
 
+local jwt = require("crescent.utils.jwt")
+local env = require("crescent.utils.env")
+
 local M = {}
 
 -- Middleware de autenticação Bearer Token simples
@@ -116,6 +119,124 @@ function M.api_key(header_name, validator)
         end
         return true
     end
+end
+
+-- Middleware de autenticação JWT
+-- Verifica token JWT no header Authorization: Bearer <token>
+-- @param options table: opções de configuração
+--   - secret: chave secreta (padrão: JWT_SECRET do .env)
+--   - issuer: issuer esperado (opcional)
+--   - audience: audience esperado (opcional)
+--   - getUserFromPayload: função para transformar payload em user (opcional)
+function M.jwt(options)
+    options = options or {}
+    
+    local secret = options.secret or env.get("JWT_SECRET")
+    if not secret or secret == "" then
+        error("JWT secret is required. Set JWT_SECRET in .env or pass as option")
+    end
+    
+    local verify_options = {
+        issuer = options.issuer,
+        audience = options.audience
+    }
+    
+    return function(ctx, next)
+        local token = ctx.getBearer()
+        
+        if not token then
+            ctx.error(401, "missing or invalid authorization header")
+            return false
+        end
+        
+        -- Verifica e decodifica token
+        local ok, payload_or_error = jwt.verify(token, secret, verify_options)
+        
+        if not ok then
+            ctx.error(401, payload_or_error or "invalid token")
+            return false
+        end
+        
+        -- Permite customização de como extrair user do payload
+        local user
+        if options.getUserFromPayload and type(options.getUserFromPayload) == "function" then
+            user = options.getUserFromPayload(payload_or_error, ctx)
+        else
+            user = payload_or_error
+        end
+        
+        -- Armazena payload completo e user no context
+        ctx.state.jwt_payload = payload_or_error
+        ctx.state.user = user
+        
+        if next then
+            return next()
+        end
+        return true
+    end
+end
+
+-- Helper para gerar tokens JWT
+-- @param payload table: dados a incluir no token
+-- @param options table: opções (secret, expiresIn, issuer, audience)
+-- @return string: token gerado
+function M.generate_token(payload, options)
+    options = options or {}
+    local secret = options.secret or env.get("JWT_SECRET")
+    
+    if not secret or secret == "" then
+        error("JWT secret is required")
+    end
+    
+    return jwt.sign(payload, secret, options)
+end
+
+-- Helper para gerar par de tokens (access + refresh)
+-- @param payload table: dados do usuário
+-- @param options table: opções customizadas
+-- @return table: { access_token, refresh_token, expires_in }
+function M.generate_token_pair(payload, options)
+    options = options or {}
+    local secret = options.secret or env.get("JWT_SECRET")
+    
+    if not secret or secret == "" then
+        error("JWT secret is required")
+    end
+    
+    local access_expires = options.access_expires_in or (15 * 60) -- 15 min
+    local refresh_expires = options.refresh_expires_in or (30 * 24 * 60 * 60) -- 30 dias
+    
+    local access_token = jwt.create_access_token(payload, secret, access_expires)
+    local refresh_token = jwt.create_refresh_token(payload, secret, refresh_expires)
+    
+    return {
+        access_token = access_token,
+        refresh_token = refresh_token,
+        token_type = "Bearer",
+        expires_in = access_expires
+    }
+end
+
+-- Helper para verificar token manualmente (fora do middleware)
+-- @param token string: token a verificar
+-- @param options table: opções de verificação
+-- @return boolean, table/string: (sucesso, payload_ou_erro)
+function M.verify_token(token, options)
+    options = options or {}
+    local secret = options.secret or env.get("JWT_SECRET")
+    
+    if not secret or secret == "" then
+        error("JWT secret is required")
+    end
+    
+    return jwt.verify(token, secret, options)
+end
+
+-- Helper para decodificar token sem verificar (apenas para debug)
+-- @param token string: token a decodificar
+-- @return table, table: header, payload
+function M.decode_token(token)
+    return jwt.decode(token)
 end
 
 return M
