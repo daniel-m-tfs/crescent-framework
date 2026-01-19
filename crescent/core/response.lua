@@ -112,6 +112,25 @@ function M.html(res, status, html, extra_headers)
     res:finish(html or "")
 end
 
+-- Renderiza e envia uma view (template)
+function M.view(res, status, view_path, data, extra_headers)
+    if res.finished then return end
+    
+    local etlua = require("crescent.utils.etlua")
+    
+    -- Renderiza o template
+    local html, err = etlua.render_file(view_path, data or {})
+    
+    if not html then
+        -- Erro ao renderizar template
+        M.error(res, 500, "Template rendering error", err)
+        return
+    end
+    
+    -- Envia como HTML
+    M.html(res, status, html, extra_headers)
+end
+
 -- Envia erro padronizado
 function M.error(res, status, message, details)
     local error_obj = {

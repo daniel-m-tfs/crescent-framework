@@ -6,7 +6,7 @@ local path_utils = require("crescent.utils.path")
 local M = {}
 
 -- Métodos HTTP suportados
-local METHODS = {"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"}
+local METHODS = {"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"}
 
 -- Cria nova instância do router
 function M.new()

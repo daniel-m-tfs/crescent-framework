@@ -61,6 +61,10 @@ function M.new(req, res, router_match)
         return response.no_content(res)
     end
     
+    ctx.view = function(view_path, data, status, extra_headers)
+        return response.view(res, status or 200, view_path, data, extra_headers)
+    end
+    
     -- Helper para obter header
     ctx.getHeader = function(name)
         return (name and headers[string.lower(name)]) or nil

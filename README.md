@@ -38,6 +38,7 @@ Server running at `http://localhost:3000` 🚀
 - 🛣️ **Routing** - Express-like routing system with parameters
 - 🔌 **Middleware** - Extensible middleware pipeline
 - 🗄️ **ORM** - Active Record pattern for MySQL
+- 🎨 **Views** - Template engine (etlua) for MVC pattern
 - 🔐 **Security** - CORS, Auth, and Security middleware built-in
 - 🎨 **CLI** - Powerful code generators (controllers, models, migrations)
 - 📦 **Modular** - Organize code in modules
@@ -64,6 +65,7 @@ crescent migrate:status          # Show migration status
 
 - **Installation Guide:** [INSTALLATION.md](INSTALLATION.md)
 - **Database Guide:** [DATABASE.md](DATABASE.md)
+- **Views & Templates:** [VIEWS.md](VIEWS.md)
 - **Security Guide:** [SECURITY.md](SECURITY.md)
 - **Website:** https://crescent.tyne.com.br
 - **Starter Template:** https://github.com/daniel-m-tfs/crescent-starter
@@ -228,6 +230,39 @@ local user = User:find(1)
 user:update({name = "Jane Doe"})
 user:delete()
 ```
+
+## 🎨 Views & Templates (MVC)
+
+Crescent supports templates using **etlua** for building MVC applications:
+
+**Controller:**
+```lua
+local function show_profile(ctx)
+    local user = User:find(ctx.params.id)
+    
+    -- Render view with data
+    return ctx.view("views/profile.etlua", {
+        name = user.name,
+        email = user.email
+    })
+end
+```
+
+**View (views/profile.etlua):**
+```html
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Profile - <%= name %></title>
+</head>
+<body>
+    <h1><%= name %></h1>
+    <p>Email: <%= email %></p>
+</body>
+</html>
+```
+
+📖 See [VIEWS.md](VIEWS.md) for complete documentation.
 
 ## 🎨 Generate Complete Module
 

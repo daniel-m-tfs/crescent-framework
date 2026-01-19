@@ -77,6 +77,11 @@ function Server:options(path, handler)
     return self
 end
 
+function Server:head(path, handler)
+    router_lib.add_route(self.router, "HEAD", path, handler)
+    return self
+end
+
 -- Define prefixo global
 function Server:prefix(p)
     router_lib.set_prefix(self.router, p)

@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Perfil de <%= name %></title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .card {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+        .info {
+            margin: 10px 0;
+            color: #666;
+        }
+        .label {
+            font-weight: bold;
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>Perfil do Usuário</h1>
+        <div class="info">
+            <span class="label">Nome:</span> <%= name %>
+        </div>
+        <div class="info">
+            <span class="label">Email:</span> <%= email %>
+        </div>
+        <% if role then %>
+        <div class="info">
+            <span class="label">Função:</span> <%= role %>
+        </div>
+        <% end %>
+        <% if created_at then %>
+        <div class="info">
+            <span class="label">Membro desde:</span> <%= created_at %>
+        </div>
+        <% end %>
+    </div>
+</body>
+</html>
