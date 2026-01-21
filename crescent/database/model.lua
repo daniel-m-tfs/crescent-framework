@@ -40,7 +40,28 @@ end
 
 -- Cria nova instância do model (não salva no DB)
 function Model:new(attributes)
-    local instance = setmetatable({}, {__index = self})
+    local instance = setmetatable({}, {
+        __index = function(t, key)
+            -- Primeiro tenta acessar métodos do Model
+            if self[key] then
+                return self[key]
+            end
+            -- Senão, acessa atributos
+            return rawget(t, "_attributes") and rawget(t, "_attributes")[key]
+        end,
+        __newindex = function(t, key, value)
+            -- Propriedades internas começam com _
+            if key:sub(1,1) == "_" then
+                rawset(t, key, value)
+            else
+                -- Outros valores vão para _attributes
+                local attrs = rawget(t, "_attributes")
+                if attrs then
+                    attrs[key] = value
+                end
+            end
+        end
+    })
     instance._attributes = attributes or {}
     instance._original = {}
     instance._exists = false

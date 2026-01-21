@@ -202,10 +202,10 @@ function M.generate_access_token(payload, options)
 end
 
 -- Helper para gerar par de tokens (access + refresh)
--- @param payload table: dados do usuário
+-- @param user table|number: dados do usuário ou ID do usuário
 -- @param options table: opções customizadas
 -- @return table: { access_token, refresh_token, expires_in }
-function M.generate_token_pair(payload, options)
+function M.generate_token_pair(user, options)
     options = options or {}
     local secret = options.secret or env.get("JWT_SECRET")
     
@@ -215,6 +215,13 @@ function M.generate_token_pair(payload, options)
     
     local access_expires = options.access_expires_in or (15 * 60) -- 15 min
     local refresh_expires = options.refresh_expires_in or (30 * 24 * 60 * 60) -- 30 dias
+    
+    -- Prepara payload do JWT
+    local payload = {
+        user_id = user.id,
+        name = user.name,
+        email = user.email
+    }
     
     local access_token = jwt.create_access_token(payload, secret, access_expires)
     local refresh_token = jwt.create_refresh_token(payload, secret, refresh_expires)
