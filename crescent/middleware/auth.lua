@@ -191,6 +191,16 @@ function M.generate_token(payload, options)
     return jwt.sign(payload, secret, options)
 end
 
+-- Helper para gerar Access Token com expiração padrão
+-- @param payload table: dados a incluir no token
+-- @param options table: opções (secret, expiresIn)
+-- @return string: token gerado
+function M.generate_access_token(payload, options)
+    options = options or {}
+    options.expiresIn = options.expiresIn or (15 * 60) -- 15 minutos
+    return M.generate_token(payload, options)
+end
+
 -- Helper para gerar par de tokens (access + refresh)
 -- @param payload table: dados do usuário
 -- @param options table: opções customizadas
