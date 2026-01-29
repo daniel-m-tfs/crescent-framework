@@ -127,27 +127,65 @@ local function run_middlewares(middlewares, ctx, index)
         return false, result
     end
     
-    return result ~= false
+    -- Se middleware retornou false, parar a cadeia
+    if result == false then
+        return false  -- Retorna false para indicar que parou
+    end
+    
+    -- Continua
+    return true
 end
 
 -- Processa requisição
 function Server:_handle_request(req, res)
-    -- Busca rota
+    -- Cria context preliminar para middlewares
+    local parsed_url = req.url and url.parse(req.url) or {}
+    local path = parsed_url.pathname or "/"
+    
+    local ctx = context_lib.new(req, res, {
+        handler = nil,
+        params = {},
+        route_path = nil
+    })
+    
+    -- Executa middlewares ANTES de procurar rotas (para arquivos estáticos)
+    if #self.middlewares > 0 then
+        local ok, err = run_middlewares(self.middlewares, ctx)
+        
+        if not ok then
+            if self.error_handler then
+                pcall(self.error_handler, ctx, err)
+            else
+                response_lib.error(res, 500, "middleware error", tostring(err))
+            end
+            return
+        end
+        
+        -- Se middleware parou (retornou false), resposta foi finalizada
+        if err == false or res.finished then
+            return
+        end
+    end
+    
+    -- Busca rota (agora após middlewares)
     local handler, params, route_path = router_lib.match_route(
         self.router, 
         req.method, 
-        req.url and url.parse(req.url).pathname or "/"
+        path
     )
     
-    -- Cria context
-    local ctx = context_lib.new(req, res, {
-        handler = handler,
-        params = params,
-        route_path = route_path
-    })
+    -- Atualiza context com informações da rota
+    ctx.handler = handler
+    ctx.params = params
+    ctx.route_path = route_path
     
     -- Handler 404 se rota não encontrada
     if not handler then
+        -- Verifica se já foi enviada uma resposta (ex: arquivo estático)
+        if res.finished then
+            return
+        end
+        
         if self.not_found_handler then
             local ok, err = pcall(self.not_found_handler, ctx)
             if not ok then
@@ -160,24 +198,6 @@ function Server:_handle_request(req, res)
             })
         end
         return
-    end
-    
-    -- Executa middlewares globais
-    if #self.middlewares > 0 then
-        local ok, err = run_middlewares(self.middlewares, ctx)
-        if not ok then
-            if self.error_handler then
-                pcall(self.error_handler, ctx, err)
-            else
-                response_lib.error(res, 500, "middleware error", tostring(err))
-            end
-            return
-        end
-        
-        -- Se middleware retornou false ou já finalizou resposta
-        if err == false or res.finished then
-            return
-        end
     end
     
     -- Lê body se necessário

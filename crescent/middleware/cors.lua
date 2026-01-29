@@ -31,7 +31,7 @@ end
 function M.default()
     return M.create({
         origin = "*",
-        methods = "GET,POST,PUT,PATCH,DELETE,OPTIONS",
+        methods = "GET,POST,PUT,PATCH,DELETE,OPTIONS,HEAD",
         headers = "Content-Type, Authorization",
         credentials = false
     })
