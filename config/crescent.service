@@ -10,12 +10,11 @@ Group=www-data
 WorkingDirectory=/var/www/crescent
 
 # Variáveis de ambiente
-Environment="ENV=production"
-Environment="NODE_ENV=production"
+Environment="APP_ENV=production"
 EnvironmentFile=-/etc/crescent/environment
 
 # Comando de execução
-ExecStart=/usr/local/bin/luvit example.lua
+ExecStart=/usr/local/bin/luvit app.lua
 
 # Restart policy
 Restart=always

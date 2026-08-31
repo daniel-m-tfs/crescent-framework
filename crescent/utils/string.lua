@@ -30,13 +30,13 @@ end
 function M.is_safe(s)
     if type(s) ~= "string" then return false end
     -- Rejeita caracteres de controle exceto \t, \r, \n
-    return not s:find("[\0-\8\11-\12\14-\31\127]")
+    return not s:find("[%z\1-\8\11-\12\14-\31\127]")
 end
 
 -- Sanitiza string removendo caracteres perigosos
 function M.sanitize(s)
     if type(s) ~= "string" then return "" end
-    return s:gsub("[\0-\8\11-\12\14-\31\127]", "")
+    return s:gsub("[%z\1-\8\11-\12\14-\31\127]", "")
 end
 
 -- Limita o tamanho da string (proteção contra DoS)

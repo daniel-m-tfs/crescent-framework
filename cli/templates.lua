@@ -212,13 +212,13 @@ local %s = Model:extend({
     
     validates = {
         -- Adicione validações aqui
-        name = {required = true, min = 3, max = 255},
+        name = {required = true, min_length = 3, max_length = 255},
     },
-    
+
     relations = {
-        -- Defina relações aqui
-        -- posts = {type = "hasMany", model = "Post", foreign_key = "user_id"},
-        -- profile = {type = "hasOne", model = "Profile", foreign_key = "user_id"},
+        -- Defina relações aqui (cada uma é uma função que recebe a instância)
+        -- posts = function(self) return self:hasMany(require("src.posts.models.post"), "user_id") end,
+        -- profile = function(self) return self:belongsTo(require("src.profile.models.profile"), "user_id") end,
     }
 })
 

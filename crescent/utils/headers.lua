@@ -110,7 +110,7 @@ end
 function M.is_safe_value(value)
     if type(value) ~= "string" then return false end
     -- Rejeita CRLF e null bytes
-    return not value:find("[\r\n\0]")
+    return not value:find("[\r\n%z]")
 end
 
 return M
