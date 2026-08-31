@@ -168,15 +168,4 @@ function hash.md5(data)
     return digest.digest('md5', data)
 end
 
--- ==========================================
--- ALIASES PARA COMPATIBILIDADE
--- ==========================================
-
--- Alias: encrypt = hash da senha
-hash.encript = hash.encrypt -- Mantém typo comum
-
--- Alias: verify = verifica senha
-hash.decript = hash.verify -- Tecnicamente não "decripta", mas verifica
-hash.decrypt = hash.verify
-
 return hash

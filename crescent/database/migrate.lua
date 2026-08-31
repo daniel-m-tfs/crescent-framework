@@ -3,35 +3,13 @@ require("../../bootstrap")
 
 local MySQL = require("crescent.database.mysql")
 
--- Cores para output
-local colors = {
-    reset = "\27[0m",
-    red = "\27[31m",
-    green = "\27[32m",
-    yellow = "\27[33m",
-    blue = "\27[34m",
-    dim = "\27[2m"
-}
-
-local function print_header(text)
-    print("\n" .. colors.blue .. "🌙 " .. text .. colors.reset .. "\n")
-end
-
-local function print_success(text)
-    print(colors.green .. "✓ " .. text .. colors.reset)
-end
-
-local function print_error(text)
-    print(colors.red .. "✗ " .. text .. colors.reset)
-end
-
-local function print_info(text)
-    print(colors.yellow .. "ℹ " .. text .. colors.reset)
-end
-
-local function print_debug(text)
-    print(colors.dim .. "  " .. text .. colors.reset)
-end
+local cli_output = require("crescent.utils.cli_output")
+local colors = cli_output.colors
+local print_header = cli_output.print_header
+local print_success = cli_output.print_success
+local print_error = cli_output.print_error
+local print_info = cli_output.print_info
+local print_debug = cli_output.print_debug
 
 local Migrate = {}
 
@@ -128,11 +106,10 @@ function Migrate.run()
             end
             
             -- Registra migration como executada
-            local insert_sql = string.format(
-                "INSERT INTO migrations (migration, batch) VALUES ('%s', %d)",
-                migration_name, current_batch
+            local insert_result, insert_err = MySQL:execute(
+                "INSERT INTO migrations (migration, batch) VALUES (?, ?)",
+                { migration_name, current_batch }
             )
-            local insert_result, insert_err = MySQL:query(insert_sql)
             if insert_err then
                 print_error("  Erro ao registrar migration: " .. insert_err)
                 goto continue
@@ -169,11 +146,11 @@ function Migrate.rollback()
     local last_batch = tonumber(batch_result[1].max_batch)
     
     -- Busca migrations do último batch
-    local migrations_result = MySQL:query(string.format([[
-        SELECT migration FROM migrations 
-        WHERE batch = %d 
+    local migrations_result = MySQL:execute([[
+        SELECT migration FROM migrations
+        WHERE batch = ?
         ORDER BY id DESC
-    ]], last_batch))
+    ]], { last_batch })
     
     if not migrations_result or #migrations_result == 0 then
         print_info("Nenhuma migration para desfazer")
@@ -207,11 +184,7 @@ function Migrate.rollback()
         end
         
         -- Remove registro da migration
-        local delete_sql = string.format(
-            "DELETE FROM migrations WHERE migration = '%s'",
-            migration_name
-        )
-        MySQL:query(delete_sql)
+        MySQL:execute("DELETE FROM migrations WHERE migration = ?", { migration_name })
         
         rolled_back = rolled_back + 1
         print_success("  Rollback executado!")

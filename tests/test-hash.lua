@@ -68,18 +68,12 @@ local hashTests = {
         end, "Password must be a non-empty string")
     end,
     
-    testeAliases = function()
+    testeEncryptVerify = function()
         local password = "test123"
-        -- Testa se os aliases funcionam
-        local hashed1 = hash.encrypt(password)
-        local hashed2 = hash.encript(password)
-        tests.assertNotNil(hashed1, "encrypt should work")
-        tests.assertNotNil(hashed2, "encript alias should work")
-        
-        -- Testa verify aliases
-        tests.assertTrue(hash.verify(password, hashed1), "verify should work")
-        tests.assertTrue(hash.decrypt(password, hashed1), "decrypt alias should work")
-        tests.assertTrue(hash.decript(password, hashed1), "decript alias should work")
+        local hashed = hash.encrypt(password)
+        tests.assertNotNil(hashed, "encrypt should work")
+        tests.assertTrue(hash.verify(password, hashed), "verify should work")
+        tests.assertFalse(hash.verify("wrong", hashed), "verify should reject wrong password")
     end
 }
 

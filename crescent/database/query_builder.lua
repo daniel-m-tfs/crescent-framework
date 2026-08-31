@@ -23,6 +23,8 @@
 --    local users = User:query():where("status", "active"):orderBy("name"):get()
 --    local custom = User:raw("SELECT * FROM users WHERE name LIKE ?", {"%Sara%"})
 
+local sql_escape = require("crescent.database.sql_escape")
+
 local QueryBuilder = {}
 QueryBuilder.__index = QueryBuilder
 
@@ -206,7 +208,8 @@ function QueryBuilder:toSql()
     -- JOINs
     for _, join in ipairs(self._joins) do
         sql = sql .. string.format(" %s JOIN %s ON %s %s %s",
-            join.type, join.table, join.first, join.operator, join.second)
+            join.type, self:_escapeIdentifier(join.table), self:_escapeIdentifier(join.first),
+            join.operator, self:_escapeIdentifier(join.second))
     end
     
     -- WHEREs
@@ -220,12 +223,12 @@ function QueryBuilder:toSql()
                 for _, v in ipairs(where.value) do
                     table.insert(values, self:_escapeValue(v))
                 end
-                clause = string.format("%s IN (%s)", where.column, table.concat(values, ", "))
+                clause = string.format("%s IN (%s)", self:_escapeIdentifier(where.column), table.concat(values, ", "))
             elseif where.operator == "IS NULL" or where.operator == "IS NOT NULL" then
-                clause = string.format("%s %s", where.column, where.operator)
+                clause = string.format("%s %s", self:_escapeIdentifier(where.column), where.operator)
             else
                 clause = string.format("%s %s %s", 
-                    where.column, where.operator, self:_escapeValue(where.value))
+                    self:_escapeIdentifier(where.column), where.operator, self:_escapeValue(where.value))
             end
             
             if i == 1 then
@@ -241,7 +244,8 @@ function QueryBuilder:toSql()
     if #self._orderBy > 0 then
         local orders = {}
         for _, order in ipairs(self._orderBy) do
-            table.insert(orders, order.column .. " " .. order.direction)
+            local direction = (order.direction == "DESC") and "DESC" or "ASC"
+            table.insert(orders, self:_escapeIdentifier(order.column) .. " " .. direction)
         end
         sql = sql .. " ORDER BY " .. table.concat(orders, ", ")
     end
@@ -261,27 +265,12 @@ end
 
 -- Escape de valores (proteção SQL Injection)
 function QueryBuilder:_escapeValue(value)
-    if type(value) == "string" then
-        -- Escape de aspas simples (duplicar) e backslashes
-        local escaped = value:gsub("\\", "\\\\"):gsub("'", "''")
-        -- Remove caracteres nulos que podem causar problemas
-        escaped = escaped:gsub("\0", "")
-        return "'" .. escaped .. "'"
-    elseif type(value) == "number" then
-        -- Valida que é realmente um número
-        if value ~= value then -- NaN check
-            return "NULL"
-        end
-        return tostring(value)
-    elseif type(value) == "boolean" then
-        return value and "1" or "0"
-    elseif value == nil then
-        return "NULL"
-    else
-        -- Fallback: converte para string e escapa
-        local str = tostring(value):gsub("\\", "\\\\"):gsub("'", "''"):gsub("\0", "")
-        return "'" .. str .. "'"
-    end
+    return sql_escape.escape_value(value)
+end
+
+-- Escape de identificadores (nomes de colunas/tabelas) com backticks
+function QueryBuilder:_escapeIdentifier(identifier)
+    return sql_escape.escape_identifier(identifier)
 end
 
 -- Valida nome de tabela/coluna (previne SQL Injection em identificadores)
@@ -337,7 +326,7 @@ function QueryBuilder:insert(data)
     local values = {}
     
     for k, v in pairs(data) do
-        table.insert(columns, k)
+        table.insert(columns, self:_escapeIdentifier(k))
         table.insert(values, self:_escapeValue(v))
     end
     
@@ -367,7 +356,7 @@ function QueryBuilder:update(data)
     local sets = {}
     
     for k, v in pairs(data) do
-        table.insert(sets, string.format("%s = %s", k, self:_escapeValue(v)))
+        table.insert(sets, string.format("%s = %s", self:_escapeIdentifier(k), self:_escapeValue(v)))
     end
     
     local sql = string.format("UPDATE %s SET %s", self._table, table.concat(sets, ", "))

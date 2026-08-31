@@ -2,6 +2,7 @@
 -- MySQL Connection Manager com prepared statements
 
 local env = require("crescent.utils.env")
+local sql_escape = require("crescent.database.sql_escape")
 
 local MySQL = {}
 MySQL.__index = MySQL
@@ -71,13 +72,19 @@ function MySQL.getConnection()
         return nil, "Driver MySQL não disponível"
     end
     
-    -- Se tem conexão disponível no pool, reutiliza
-    if pool_size > 0 then
+    -- Se tem conexão disponível no pool, reutiliza (se ainda estiver viva)
+    while pool_size > 0 do
         local conn = table.remove(connection_pool)
         pool_size = pool_size - 1
-        return conn
+
+        local alive = pcall(function() return conn:execute("SELECT 1") end)
+        if alive then
+            return conn
+        end
+
+        pcall(function() conn:close() end)
     end
-    
+
     -- Senão, cria nova
     return MySQL.connect()
 end
@@ -153,27 +160,14 @@ function MySQL:execute(sql, params)
         return nil, env_obj
     end
     
-    -- Escapa parâmetros manualmente (luasql não tem prepared statements nativos)
+    -- Escapa parâmetros (fonte única: crescent.database.sql_escape)
     local escaped_sql = sql
     if params and #params > 0 then
         for i, param in ipairs(params) do
-            local escaped_value
-            if type(param) == "string" then
-                escaped_value = "'" .. conn:escape(param) .. "'"
-            elseif type(param) == "number" then
-                escaped_value = tostring(param)
-            elseif type(param) == "boolean" then
-                escaped_value = param and "1" or "0"
-            elseif param == nil then
-                escaped_value = "NULL"
-            else
-                escaped_value = "'" .. conn:escape(tostring(param)) .. "'"
-            end
-            
-            escaped_sql = escaped_sql:gsub("?", escaped_value, 1)
+            escaped_sql = escaped_sql:gsub("?", sql_escape.escape_value(param), 1)
         end
     end
-    
+
     return self:query(escaped_sql)
 end
 
@@ -204,27 +198,14 @@ function MySQL:insert(sql, params)
         return nil, env_obj
     end
     
-    -- Escapa parâmetros se necessário
+    -- Escapa parâmetros (fonte única: crescent.database.sql_escape)
     local escaped_sql = sql
     if params and #params > 0 then
         for i, param in ipairs(params) do
-            local escaped_value
-            if type(param) == "string" then
-                escaped_value = "'" .. conn:escape(param) .. "'"
-            elseif type(param) == "number" then
-                escaped_value = tostring(param)
-            elseif type(param) == "boolean" then
-                escaped_value = param and "1" or "0"
-            elseif param == nil then
-                escaped_value = "NULL"
-            else
-                escaped_value = "'" .. conn:escape(tostring(param)) .. "'"
-            end
-            
-            escaped_sql = escaped_sql:gsub("?", escaped_value, 1)
+            escaped_sql = escaped_sql:gsub("?", sql_escape.escape_value(param), 1)
         end
     end
-    
+
     -- Executa INSERT
     local cursor, err = conn:execute(escaped_sql)
     

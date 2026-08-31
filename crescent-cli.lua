@@ -5,31 +5,12 @@
 local fs = require('fs')
 local path = require('path')
 
--- Cores para output
-local colors = {
-    reset = "\27[0m",
-    green = "\27[32m",
-    blue = "\27[34m",
-    yellow = "\27[33m",
-    red = "\27[31m",
-    bold = "\27[1m"
-}
-
-local function print_success(msg)
-    print(colors.green .. "✓ " .. msg .. colors.reset)
-end
-
-local function print_info(msg)
-    print(colors.blue .. "ℹ " .. msg .. colors.reset)
-end
-
-local function print_error(msg)
-    print(colors.red .. "✗ " .. msg .. colors.reset)
-end
-
-local function print_header(msg)
-    print(colors.bold .. colors.blue .. "\n🌙 " .. msg .. colors.reset .. "\n")
-end
+local cli_output = require('crescent.utils.cli_output')
+local colors = cli_output.colors
+local print_success = cli_output.print_success
+local print_info = cli_output.print_info
+local print_error = cli_output.print_error
+local print_header = cli_output.print_header
 
 -- Capitaliza primeira letra
 local function capitalize(str)

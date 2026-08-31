@@ -1,24 +1,31 @@
 -- crescent/middleware/static.lua
 -- Middleware para servir arquivos estáticos
 
+local path_utils = require("crescent.utils.path")
+
 local M = {}
 
 -- Cria middleware para servir arquivos estáticos
 -- @param public_dir: Diretório de arquivos públicos (padrão: "public")
 function M.create(public_dir)
     public_dir = public_dir or "public"
-    
+
     return function(ctx, next)
         -- Verifica se é uma requisição GET ou HEAD
         if ctx.method ~= "GET" and ctx.method ~= "HEAD" then
             return next()
         end
-        
+
         local req_path = ctx.path
-        
+
+        -- Rejeita path traversal antes de tocar o filesystem
+        if not path_utils.is_safe(req_path) then
+            return next()
+        end
+
         -- Remove a barra inicial se existir
         req_path = req_path:gsub("^/", "")
-        
+
         -- Constrói o caminho do arquivo com separador correto
         local file_path = public_dir .. "/" .. req_path
         

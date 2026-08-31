@@ -23,18 +23,37 @@ function M.rate_limit(options)
     options = options or {}
     local window = options.window or 60 -- segundos
     local max_requests = options.max_requests or 100
+    local sweep_every = options.sweep_every or 1000 -- requisições entre sweeps
     local requests = {} -- {ip: {count, reset_time}}
-    
+    local requests_seen = 0
+
+    -- Remove entradas cuja janela já expirou (evita memory leak sob tráfego
+    -- de IPs que nunca mais voltam, ex.: scanners/bots)
+    local function sweep(now)
+        for ip, record in pairs(requests) do
+            if now > record.reset then
+                requests[ip] = nil
+            end
+        end
+    end
+
     return function(ctx, next)
         -- Obtém IP (considera X-Forwarded-For se atrás de proxy)
-        local ip = ctx.getHeader("x-forwarded-for") or 
+        local ip = ctx.getHeader("x-forwarded-for") or
                    ctx.getHeader("x-real-ip") or
                    ctx.req.socket.remoteAddress or
                    "unknown"
-        
+
         local now = os.time()
+
+        requests_seen = requests_seen + 1
+        if requests_seen >= sweep_every then
+            requests_seen = 0
+            sweep(now)
+        end
+
         local record = requests[ip]
-        
+
         if not record or now > record.reset then
             requests[ip] = {
                 count = 1,

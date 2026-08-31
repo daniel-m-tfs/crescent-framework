@@ -3,6 +3,7 @@
 
 local jwt = require("crescent.utils.jwt")
 local env = require("crescent.utils.env")
+local base64 = require("crescent.utils.base64")
 
 local M = {}
 
@@ -60,9 +61,13 @@ function M.basic(validator)
             return false
         end
         
-        -- Decodifica Base64 (implementação simplificada)
-        -- Em produção, use biblioteca adequada
-        local decoded = credentials -- TODO: implementar decode base64
+        local decoded = base64.decode(credentials)
+
+        if not decoded then
+            ctx.error(401, "invalid credentials format")
+            return false
+        end
+
         local username, password = decoded:match("^([^:]+):(.+)$")
         
         if not username or not password then
@@ -254,6 +259,14 @@ end
 -- @return table, table: header, payload
 function M.decode_token(token)
     return jwt.decode(token)
+end
+
+-- Middleware de proteção padrão (atalho para JWT)
+-- Usa as configurações padrão do ambiente
+-- @param options table: opções adicionais (opcional)
+-- @return function: middleware
+function M.protected(options)
+    return M.jwt(options)
 end
 
 return M
