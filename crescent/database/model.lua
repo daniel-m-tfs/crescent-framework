@@ -2,9 +2,14 @@
 -- Active Record ORM para Crescent Framework
 
 local QueryBuilder = require("crescent.database.query_builder")
+local validation = require("crescent.database.model.validation")
+local relations = require("crescent.database.model.relations")
 
 local Model = {}
 Model.__index = Model
+
+for k, v in pairs(validation) do Model[k] = v end
+for k, v in pairs(relations) do Model[k] = v end
 
 -- Cria nova classe Model
 function Model:extend(config)
@@ -248,95 +253,6 @@ function Model:delete()
     end
     
     return false
-end
-
--- ==========================
--- VALIDATIONS
--- ==========================
-
-function Model:validate()
-    if not self._validates or not next(self._validates) then
-        return true
-    end
-    
-    local errors = {}
-    
-    for field, rules in pairs(self._validates) do
-        local value = self._attributes[field]
-        
-        -- Required
-        if rules.required and (not value or value == "") then
-            errors[field] = field .. " is required"
-        end
-        
-        -- Min length
-        if rules.min_length and value and #tostring(value) < rules.min_length then
-            errors[field] = field .. " must be at least " .. rules.min_length .. " characters"
-        end
-        
-        -- Max length
-        if rules.max_length and value and #tostring(value) > rules.max_length then
-            errors[field] = field .. " must be at most " .. rules.max_length .. " characters"
-        end
-        
-        -- Email
-        if rules.email and value then
-            if not string.match(value, "^[%w._%+-]+@[%w.-]+%.%w+$") then
-                errors[field] = field .. " must be a valid email"
-            end
-        end
-        
-        -- Unique (verifica no banco)
-        if rules.unique and value then
-            local query = self:query():where(field, value)
-            
-            -- Se está atualizando, ignora o próprio registro
-            if self._exists then
-                local id = self._attributes[self._primary_key]
-                query = query:where(self._primary_key, "!=", id)
-            end
-            
-            local exists = query:first()
-            if exists then
-                errors[field] = field .. " already exists"
-            end
-        end
-    end
-    
-    if next(errors) then
-        return false, errors
-    end
-    
-    return true
-end
-
--- ==========================
--- RELATIONS
--- ==========================
-
--- Has Many
-function Model:hasMany(RelatedModel, foreign_key, local_key)
-    local local_key = local_key or self._primary_key
-    local foreign_key = foreign_key or self._table:sub(1, -2) .. "_id" -- users -> user_id
-    
-    local local_value = self._attributes[local_key]
-    
-    return RelatedModel:query():where(foreign_key, local_value)
-end
-
--- Has One
-function Model:hasOne(RelatedModel, foreign_key, local_key)
-    return self:hasMany(RelatedModel, foreign_key, local_key):first()
-end
-
--- Belongs To
-function Model:belongsTo(RelatedModel, foreign_key, owner_key)
-    local owner_key = owner_key or RelatedModel._primary_key
-    local foreign_key = foreign_key or RelatedModel._table:sub(1, -2) .. "_id"
-    
-    local foreign_value = self._attributes[foreign_key]
-    
-    return RelatedModel:find(foreign_value)
 end
 
 -- ==========================
