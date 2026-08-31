@@ -72,8 +72,8 @@ end
 -- Valida se o path é seguro (sem path traversal)
 function M.is_safe(path)
     if type(path) ~= "string" then return false end
-    -- Rejeita tentativas de path traversal
-    if path:find("%.%.", 1, true) then return false end
+    -- Rejeita tentativas de path traversal (busca literal por "..")
+    if path:find("..", 1, true) then return false end
     -- Rejeita null bytes
     if path:find("\0") then return false end
     return true

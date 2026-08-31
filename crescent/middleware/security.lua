@@ -108,7 +108,7 @@ end
 -- Proteção contra path traversal
 function M.path_traversal()
     return function(ctx, next)
-        if ctx.path:find("%.%.", 1, true) then
+        if ctx.path:find("..", 1, true) then
             ctx.error(400, "invalid path")
             return false
         end
