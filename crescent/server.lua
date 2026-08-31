@@ -12,16 +12,51 @@ local response_lib = require("crescent.core.response")
 local Server = {}
 Server.__index = Server
 
+local DEFAULT_CONFIG = {
+    server = {
+        host = "0.0.0.0",
+        port = 8080,
+        max_body_size = 10 * 1024 * 1024 -- 10MB
+    }
+}
+
+-- Faz merge raso de `config` sobre `defaults`, mesclando um nível de tabelas
+-- aninhadas (ex.: config.server preenche só as chaves que faltam)
+local function merge_config(defaults, config)
+    local result = {}
+    for k, v in pairs(defaults) do
+        result[k] = v
+    end
+
+    if config then
+        for k, v in pairs(config) do
+            if type(v) == "table" and type(result[k]) == "table" then
+                local merged = {}
+                for kk, vv in pairs(result[k]) do merged[kk] = vv end
+                for kk, vv in pairs(v) do merged[kk] = vv end
+                result[k] = merged
+            else
+                result[k] = v
+            end
+        end
+    end
+
+    return result
+end
+
 -- Cria nova instância do servidor
-function Server.new()
+-- @param config table opcional: mesmo formato de config/development.lua
+-- (server, cors, security, logging, database, jwt, api). Só `server` é
+-- consumido diretamente pelo core (host/port/max_body_size); as demais
+-- seções ficam disponíveis em app.config para uso opcional pela aplicação,
+-- ex.: app:use(cors.create(app.config.cors))
+function Server.new(config)
     return setmetatable({
         router = router_lib.new(),
         middlewares = {},
         error_handler = nil,
         not_found_handler = nil,
-        config = {
-            max_body_size = 10 * 1024 * 1024 -- 10MB
-        }
+        config = merge_config(DEFAULT_CONFIG, config)
     }, Server)
 end
 
@@ -201,7 +236,7 @@ function Server:_handle_request(req, res)
     end
     
     -- Lê body se necessário
-    request_lib.read_body(req, self.config.max_body_size, function(raw, parsed, err)
+    request_lib.read_body(req, self.config.server.max_body_size, function(raw, parsed, err)
         context_lib.set_body(ctx, raw, parsed, err)
         
         -- Executa handler da rota
@@ -229,9 +264,9 @@ end
 
 -- Inicia servidor
 function Server:listen(port, host)
-    host = host or "0.0.0.0"
-    port = port or 8080
-    
+    port = port or self.config.server.port
+    host = host or self.config.server.host
+
     http.createServer(function(req, res)
         self:_handle_request(req, res)
     end):listen(port, host)
@@ -241,9 +276,9 @@ function Server:listen(port, host)
     return self
 end
 
--- Configura opção do servidor
+-- Configura opção do servidor (host/port/max_body_size)
 function Server:set(key, value)
-    self.config[key] = value
+    self.config.server[key] = value
     return self
 end
 
