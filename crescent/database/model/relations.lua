@@ -61,6 +61,9 @@ function M.hasMany(self, RelatedModel, foreign_key, local_key)
     foreign_key = foreign_key or default_foreign_key(self._table)
 
     local local_value = self._attributes[local_key]
+    if local_value == nil then
+        return {}
+    end
     local query = RelatedModel:query():where(foreign_key, local_value)
 
     return hydrate_query(RelatedModel, query)
@@ -74,6 +77,9 @@ function M.hasOne(self, RelatedModel, foreign_key, local_key)
     foreign_key = foreign_key or default_foreign_key(self._table)
 
     local local_value = self._attributes[local_key]
+    if local_value == nil then
+        return nil
+    end
     local result, err = RelatedModel:query():where(foreign_key, local_value):first()
     if err or not result then
         return nil, err

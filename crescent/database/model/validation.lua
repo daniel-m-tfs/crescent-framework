@@ -75,8 +75,10 @@ function M.validate(self)
                 query = query:where(self._primary_key, "!=", id)
             end
 
-            local exists = query:first()
-            if exists then
+            local exists, query_error = query:first()
+            if query_error then
+                add_error(field, "could not verify uniqueness: " .. query_error)
+            elseif exists then
                 add_error(field, field .. " already exists")
             end
         end

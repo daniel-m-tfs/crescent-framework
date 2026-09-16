@@ -5,6 +5,7 @@ require("../bootstrap")
 
 local MySQL = require("crescent.database.mysql")
 local DB = require("crescent.database.query_builder")
+local TEST_TABLE = "crescent_framework_mysql_test_users"
 
 print("🌙 Crescent Framework - Teste MySQL")
 print("")
@@ -15,18 +16,24 @@ MySQL.test()
 print("")
 
 -- Cria tabela de exemplo (se não existir)
-print("2️⃣ Criando tabela users (se não existir)...")
-local create_table = [[
-    CREATE TABLE IF NOT EXISTS users (
+print("2️⃣ Criando tabela de teste (se não existir)...")
+local create_table = string.format([[
+    CREATE TABLE IF NOT EXISTS `%s` (
         id INT AUTO_INCREMENT PRIMARY KEY,
         name VARCHAR(255) NOT NULL,
         email VARCHAR(255) UNIQUE NOT NULL,
         active BOOLEAN DEFAULT 1,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
-]]
+]], TEST_TABLE)
 
-local result, err = MySQL:query(create_table)
+local result, err = MySQL:query("DROP TABLE IF EXISTS `" .. TEST_TABLE .. "`")
+if not result and err then
+    print("❌ Erro ao limpar tabela de teste:", err)
+    os.exit(1)
+end
+
+result, err = MySQL:query(create_table)
 if err then
     print("❌ Erro:", err)
 else
@@ -36,7 +43,7 @@ print("")
 
 -- INSERT com Query Builder
 print("3️⃣ Inserindo usuário...")
-local user_id = DB.table("users"):insert({
+local user_id = DB.table(TEST_TABLE):insert({
     name = "João Silva",
     email = "joao" .. os.time() .. "@example.com", -- Email único
     active = true
@@ -51,7 +58,7 @@ print("")
 
 -- SELECT com Query Builder
 print("4️⃣ Buscando usuários ativos...")
-local users = DB.table("users")
+local users = DB.table(TEST_TABLE)
     :where("active", true)
     :orderBy("created_at", "DESC")
     :limit(5)
@@ -69,7 +76,7 @@ print("")
 
 -- UPDATE com Query Builder
 print("5️⃣ Atualizando usuário...")
-local update_result = DB.table("users")
+local update_result = DB.table(TEST_TABLE)
     :where("id", user_id)
     :update({ name = "João Silva Santos" })
 
@@ -82,7 +89,7 @@ print("")
 
 -- SELECT específico
 print("6️⃣ Buscando usuário atualizado...")
-local updated_user = DB.table("users")
+local updated_user = DB.table(TEST_TABLE)
     :where("id", user_id)
     :first()
 
@@ -95,7 +102,7 @@ print("")
 
 -- COUNT
 print("7️⃣ Contando usuários ativos...")
-local count = DB.table("users")
+local count = DB.table(TEST_TABLE)
     :where("active", true)
     :count()
 print("✓ Total:", count)
@@ -111,6 +118,7 @@ print("")
 -- end
 
 -- Fecha conexões
+MySQL:query("DROP TABLE IF EXISTS `" .. TEST_TABLE .. "`")
 MySQL.closeAll()
 
 print("✅ Teste concluído!")

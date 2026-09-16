@@ -8,6 +8,13 @@ local relations = require("crescent.database.model.relations")
 local Model = {}
 Model.__index = Model
 
+local function is_unique_constraint_error(err)
+    local message = tostring(err or ""):lower()
+    return message:find("1062", 1, true) ~= nil
+        or message:find("duplicate entry", 1, true) ~= nil
+        or message:find("duplicate key", 1, true) ~= nil
+end
+
 for k, v in pairs(validation) do Model[k] = v end
 for k, v in pairs(relations) do Model[k] = v end
 
@@ -105,10 +112,11 @@ end
 
 -- Busca por ID
 function Model:find(id)
-    local result = self:query()
+    local result, err = self:query()
         :where(self._primary_key, id)
         :first()
     
+    if err then return nil, err end
     if result then
         local instance = self:new(result)
         instance._original = self:_copyTable(result)
@@ -121,7 +129,8 @@ end
 
 -- Busca por ID ou erro
 function Model:findOrFail(id)
-    local instance = self:find(id)
+    local instance, err = self:find(id)
+    if err then error(err) end
     if not instance then
         error("Model not found with " .. self._primary_key .. " = " .. tostring(id))
     end
@@ -130,7 +139,8 @@ end
 
 -- Busca primeiro registro
 function Model:first()
-    local result = self:query():first()
+    local result, err = self:query():first()
+    if err then return nil, err end
     if result then
         local instance = self:new(result)
         instance._original = self:_copyTable(result)
@@ -142,7 +152,8 @@ end
 
 -- Busca todos os registros
 function Model:all()
-    local results = self:query():get()
+    local results, err = self:query():get()
+    if err then return nil, err end
     return self:_hydrate(results)
 end
 
@@ -211,6 +222,9 @@ function Model:create(attributes)
         return instance
     end
     
+    if is_unique_constraint_error(err) then
+        return nil, { _database = "a unique constraint was violated" }
+    end
     return nil, err or "Failed to create record"
 end
 
@@ -372,6 +386,9 @@ function Model:_performInsert()
         return true
     end
 
+    if is_unique_constraint_error(err) then
+        return false, { _database = "a unique constraint was violated" }
+    end
     return false, err or "Failed to insert record"
 end
 
@@ -424,6 +441,9 @@ function Model:_performUpdate()
         return true
     end
 
+    if is_unique_constraint_error(err) then
+        return false, { _database = "a unique constraint was violated" }
+    end
     return false, err or "Failed to update record"
 end
 

@@ -17,14 +17,75 @@ MySQL.__index = MySQL
 --    sobrou DENTRO de um valor já substituído com o placeholder seguinte.
 -- Uma única passada com função-replacement resolve os dois problemas.
 local function bind_params(sql, params)
-    if not params or #params == 0 then
+    params = params or {}
+    if type(params) ~= "table" then
+        return nil, "SQL bindings devem ser uma tabela"
+    end
+
+    local output = {}
+    local placeholders = 0
+    local quote = nil
+    local escaped = false
+
+    for i = 1, #sql do
+        local char = sql:sub(i, i)
+        if quote then
+            table.insert(output, char)
+            if escaped then
+                escaped = false
+            elseif char == "\\" and quote ~= "`" then
+                escaped = true
+            elseif char == quote then
+                quote = nil
+            end
+        elseif char == "'" or char == '"' or char == "`" then
+            quote = char
+            table.insert(output, char)
+        elseif char == "?" then
+            placeholders = placeholders + 1
+            table.insert(output, "?")
+        else
+            table.insert(output, char)
+        end
+    end
+
+    if placeholders ~= #params then
+        return nil, string.format(
+            "Quantidade de bindings incompatível: esperados %d, recebidos %d",
+            placeholders, #params
+        )
+    end
+
+    if placeholders == 0 then
         return sql
     end
-    local i = 0
-    return (sql:gsub("%?", function()
-        i = i + 1
-        return sql_escape.escape_value(params[i])
-    end))
+
+    local bound = {}
+    local parameter = 0
+    quote = nil
+    escaped = false
+    for i = 1, #sql do
+        local char = sql:sub(i, i)
+        if quote then
+            table.insert(bound, char)
+            if escaped then
+                escaped = false
+            elseif char == "\\" and quote ~= "`" then
+                escaped = true
+            elseif char == quote then
+                quote = nil
+            end
+        elseif char == "'" or char == '"' or char == "`" then
+            quote = char
+            table.insert(bound, char)
+        elseif char == "?" then
+            parameter = parameter + 1
+            table.insert(bound, sql_escape.escape_value(params[parameter]))
+        else
+            table.insert(bound, char)
+        end
+    end
+    return table.concat(bound)
 end
 
 -- Pool de conexões (simples)
@@ -93,11 +154,17 @@ function MySQL.connect()
         )
         
         if not conn then
+            pcall(function() env_obj:close() end)
             return nil, "Falha ao conectar: " .. (err or "erro desconhecido")
         end
         
         -- Configura charset UTF-8
-        conn:execute("SET NAMES utf8mb4")
+        local charset_ok, charset_err = conn:execute("SET NAMES utf8mb4")
+        if not charset_ok then
+            pcall(function() conn:close() end)
+            pcall(function() env_obj:close() end)
+            return nil, "Falha ao configurar charset utf8mb4: " .. (charset_err or "erro desconhecido")
+        end
         
         return conn, env_obj
     end
@@ -147,10 +214,9 @@ function MySQL.releaseConnection(conn)
 end
 
 -- Executa query simples
-function MySQL:query(sql)
+function MySQL:query(sql, params)
     if not driver_available then
-        print("⚠️  [MOCK] SQL:", sql)
-        return { affected = 0, note = "Driver MySQL não instalado" }
+        return nil, "Driver MySQL não instalado. Execute: luarocks install luasql-mysql"
     end
     
     local conn, env_obj = self.getConnection()
@@ -158,7 +224,14 @@ function MySQL:query(sql)
         return nil, env_obj -- env_obj contém a mensagem de erro
     end
     
-    local cursor, err = conn:execute(sql)
+    -- LuaSQL não expõe prepared statements portáveis; o binding centralizado
+    -- mantém a API parametrizada e faz escaping em uma única passagem.
+    local bound_sql, bind_err = bind_params(sql, params)
+    if not bound_sql then
+        self.releaseConnection(conn)
+        return nil, bind_err
+    end
+    local cursor, err = conn:execute(bound_sql)
     
     if not cursor then
         conn:close()
@@ -190,23 +263,7 @@ end
 
 -- Executa query com prepared statement (seguro contra SQL injection)
 function MySQL:execute(sql, params)
-    if not driver_available then
-        print("⚠️  [MOCK] SQL:", sql)
-        if params and next(params) then
-            print("⚠️  [MOCK] Params:", table.concat(params, ", "))
-        end
-        return { affected = 0, note = "Driver MySQL não instalado" }
-    end
-    
-    local conn, env_obj = self.getConnection()
-    if not conn then
-        return nil, env_obj
-    end
-    
-    -- Escapa parâmetros (fonte única: crescent.database.sql_escape)
-    local escaped_sql = bind_params(sql, params)
-
-    return self:query(escaped_sql)
+    return self:query(sql, params)
 end
 
 -- Busca múltiplos registros
@@ -226,7 +283,6 @@ end
 -- INSERT e retorna ID
 function MySQL:insert(sql, params)
     if not driver_available then
-        print("⚠️  [MOCK] SQL:", sql)
         return nil, "Driver MySQL não disponível"
     end
     
@@ -237,7 +293,11 @@ function MySQL:insert(sql, params)
     end
     
     -- Escapa parâmetros (fonte única: crescent.database.sql_escape)
-    local escaped_sql = bind_params(sql, params)
+    local escaped_sql, bind_err = bind_params(sql, params)
+    if not escaped_sql then
+        self.releaseConnection(conn)
+        return nil, bind_err
+    end
 
     -- Executa INSERT
     local cursor, err = conn:execute(escaped_sql)
@@ -291,6 +351,10 @@ function MySQL.transaction(statements)
         return nil, config_err
     end
 
+    if type(statements) ~= "table" or #statements == 0 then
+        return nil, "A transação precisa conter pelo menos uma statement"
+    end
+
     local conn, env_obj = MySQL.connect()
     if not conn then
         return nil, env_obj
@@ -304,7 +368,17 @@ function MySQL.transaction(statements)
 
     local results = {}
     for i, stmt in ipairs(statements) do
-        local sql = bind_params(stmt.sql, stmt.params)
+        if type(stmt) ~= "table" or type(stmt.sql) ~= "string" or stmt.sql == "" then
+            pcall(function() conn:execute("ROLLBACK") end)
+            pcall(function() conn:close() end)
+            return nil, string.format("Statement inválida na posição %d", i)
+        end
+        local sql, bind_err = bind_params(stmt.sql, stmt.params)
+        if not sql then
+            pcall(function() conn:execute("ROLLBACK") end)
+            pcall(function() conn:close() end)
+            return nil, string.format("Erro de bindings na statement %d: %s", i, bind_err)
+        end
         local cursor, err = conn:execute(sql)
 
         if not cursor then

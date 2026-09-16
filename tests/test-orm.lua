@@ -4,13 +4,37 @@
 require("../bootstrap")
 
 local Model = require("crescent.database.model")
+local MySQL = require("crescent.database.mysql")
+local TEST_TABLE = "crescent_framework_orm_test_users"
+
+local schema = string.format([[
+    CREATE TABLE IF NOT EXISTS `%s` (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        email VARCHAR(255) UNIQUE NOT NULL,
+        password VARCHAR(255) NOT NULL,
+        active BOOLEAN DEFAULT 1,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+]], TEST_TABLE)
+
+local cleanup_result, cleanup_err = MySQL:query("DROP TABLE IF EXISTS `" .. TEST_TABLE .. "`")
+if not cleanup_result and cleanup_err then
+    error("Falha ao limpar tabela de teste ORM: " .. cleanup_err)
+end
+
+local schema_result, schema_err = MySQL:query(schema)
+if not schema_result and schema_err then
+    error("Falha ao criar tabela de teste ORM: " .. schema_err)
+end
 
 print("🌙 Crescent ORM - Teste Completo")
 print("")
 
 -- Define User Model inline
 local User = Model:extend({
-    table = "users",
+    table = TEST_TABLE,
     fillable = {"name", "email", "password", "active"},
     hidden = {"password"},
     timestamps = true,
@@ -200,3 +224,6 @@ print("   ✅ Hooks (before_save, after_create, etc)")
 print("   ✅ Relações (hasMany, hasOne, belongsTo)")
 print("   ✅ Query Builder integration")
 print("   ✅ Scopes personalizados")
+
+MySQL:query("DROP TABLE IF EXISTS `" .. TEST_TABLE .. "`")
+MySQL.closeAll()

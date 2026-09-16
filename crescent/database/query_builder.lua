@@ -28,6 +28,12 @@ local sql_escape = require("crescent.database.sql_escape")
 local QueryBuilder = {}
 QueryBuilder.__index = QueryBuilder
 
+local ALLOWED_OPERATORS = {
+    ["="] = true, ["!="] = true, ["<>"] = true,
+    ["<"] = true, ["<="] = true, [">"] = true, [">="] = true,
+    ["LIKE"] = true, ["NOT LIKE"] = true,
+}
+
 -- MySQL Connection (opcional)
 local MySQL = nil
 local mysql_available = false
@@ -55,13 +61,24 @@ end
 
 -- Define tabela
 function QueryBuilder:table(table_name)
-    self._table = self:_validateIdentifier(table_name)
+    self._table = self:_escapeIdentifier(self:_validateIdentifier(table_name))
     return self
 end
 
 -- SELECT
 function QueryBuilder:select(...)
-    self._selects = {...}
+    local columns = {...}
+    if #columns == 0 then
+        error("select requires at least one column")
+    end
+    self._selects = {}
+    for _, column in ipairs(columns) do
+        if column == "*" then
+            table.insert(self._selects, column)
+        else
+            table.insert(self._selects, self:_escapeIdentifier(column))
+        end
+    end
     return self
 end
 
@@ -72,6 +89,12 @@ function QueryBuilder:where(column, operator, value)
         value = operator
         operator = "="
     end
+
+    if value == nil then
+        return self:whereNull(column)
+    end
+
+    operator = self:_validateOperator(operator)
     
     table.insert(self._wheres, {
         column = column,
@@ -87,6 +110,18 @@ function QueryBuilder:orWhere(column, operator, value)
         value = operator
         operator = "="
     end
+
+    if value == nil then
+        table.insert(self._wheres, {
+            column = column,
+            operator = "IS NULL",
+            value = nil,
+            type = "OR"
+        })
+        return self
+    end
+
+    operator = self:_validateOperator(operator)
     
     table.insert(self._wheres, {
         column = column,
@@ -98,6 +133,9 @@ function QueryBuilder:orWhere(column, operator, value)
 end
 
 function QueryBuilder:whereIn(column, values)
+    if type(values) ~= "table" then
+        error("whereIn values must be a table")
+    end
     table.insert(self._wheres, {
         column = column,
         operator = "IN",
@@ -133,13 +171,15 @@ function QueryBuilder:join(table_name, first, operator, second)
         second = operator
         operator = "="
     end
+
+    operator = self:_validateOperator(operator)
     
     table.insert(self._joins, {
         type = "INNER",
-        table = table_name,
-        first = first,
+        table = self:_escapeIdentifier(table_name),
+        first = self:_escapeIdentifier(first),
         operator = operator,
-        second = second
+        second = self:_escapeIdentifier(second)
     })
     return self
 end
@@ -149,13 +189,15 @@ function QueryBuilder:leftJoin(table_name, first, operator, second)
         second = operator
         operator = "="
     end
+
+    operator = self:_validateOperator(operator)
     
     table.insert(self._joins, {
         type = "LEFT",
-        table = table_name,
-        first = first,
+        table = self:_escapeIdentifier(table_name),
+        first = self:_escapeIdentifier(first),
         operator = operator,
-        second = second
+        second = self:_escapeIdentifier(second)
     })
     return self
 end
@@ -163,6 +205,10 @@ end
 -- ORDER BY
 function QueryBuilder:orderBy(column, direction)
     direction = direction or "ASC"
+    direction = type(direction) == "string" and string.upper(direction) or "ASC"
+    if direction ~= "ASC" and direction ~= "DESC" then
+        direction = "ASC"
+    end
     table.insert(self._orderBy, {
         column = column,
         direction = direction
@@ -172,11 +218,17 @@ end
 
 -- LIMIT / OFFSET
 function QueryBuilder:limit(num)
+    if type(num) ~= "number" or num < 0 or num % 1 ~= 0 then
+        error("LIMIT must be a non-negative integer")
+    end
     self._limit = num
     return self
 end
 
 function QueryBuilder:offset(num)
+    if type(num) ~= "number" or num < 0 or num % 1 ~= 0 then
+        error("OFFSET must be a non-negative integer")
+    end
     self._offset = num
     return self
 end
@@ -193,6 +245,13 @@ end
 function QueryBuilder:paginate(page, per_page)
     page = page or 1
     per_page = per_page or 15
+
+    if type(page) ~= "number" or page < 1 or page % 1 ~= 0 then
+        error("Page must be a positive integer")
+    end
+    if type(per_page) ~= "number" or per_page < 1 or per_page % 1 ~= 0 then
+        error("Per-page must be a positive integer")
+    end
     
     self:limit(per_page)
     self:offset((page - 1) * per_page)
@@ -250,8 +309,7 @@ function QueryBuilder:toSql()
     -- JOINs
     for _, join in ipairs(self._joins) do
         sql = sql .. string.format(" %s JOIN %s ON %s %s %s",
-            join.type, self:_escapeIdentifier(join.table), self:_escapeIdentifier(join.first),
-            join.operator, self:_escapeIdentifier(join.second))
+            join.type, join.table, join.first, join.operator, join.second)
     end
 
     -- WHEREs
@@ -293,11 +351,22 @@ function QueryBuilder:_escapeIdentifier(identifier)
     return sql_escape.escape_identifier(identifier)
 end
 
+function QueryBuilder:_validateOperator(operator)
+    if type(operator) ~= "string" then
+        error("Invalid SQL operator: " .. tostring(operator))
+    end
+    operator = string.upper(operator)
+    if not ALLOWED_OPERATORS[operator] then
+        error("Invalid SQL operator: " .. operator)
+    end
+    return operator
+end
+
 -- Valida nome de tabela/coluna (previne SQL Injection em identificadores)
 function QueryBuilder:_validateIdentifier(identifier)
     -- Permite apenas letras, números, underscore e ponto
-    if not identifier:match("^[a-zA-Z0-9_.]+$") then
-        error("Invalid identifier: " .. identifier .. " (only alphanumeric, underscore and dot allowed)")
+    if type(identifier) ~= "string" or not identifier:match("^[a-zA-Z0-9_.]+$") then
+        error("Invalid identifier: " .. tostring(identifier) .. " (only alphanumeric, underscore and dot allowed)")
     end
     return identifier
 end
@@ -323,9 +392,9 @@ end
 
 function QueryBuilder:first()
     self:limit(1)
-    local results = self:get()
+    local results, err = self:get()
     
-    if not results then return nil end
+    if not results then return nil, err end
     if type(results) == "table" and #results > 0 then
         return results[1]
     end
@@ -450,24 +519,7 @@ function M.raw(sql, bindings)
     
     -- Se MySQL disponível E driver instalado, executa query real
     if mysql_available and mysql_driver_available and MySQL then
-        -- Se tiver bindings, substitui placeholders ? pelos valores escapados
-        if #bindings > 0 then
-            local qb = QueryBuilder.new()
-            local escaped_values = {}
-            for _, value in ipairs(bindings) do
-                table.insert(escaped_values, qb:_escapeValue(value))
-            end
-            
-            -- Substitui ? pelos valores escapados
-            local i = 1
-            sql = sql:gsub("%?", function()
-                local val = escaped_values[i]
-                i = i + 1
-                return val or "NULL"
-            end)
-        end
-        
-        local results, err = MySQL:query(sql)
+        local results, err = MySQL:query(sql, bindings)
         if err then
             print("❌ Erro MySQL (raw):", err)
             return nil, err
