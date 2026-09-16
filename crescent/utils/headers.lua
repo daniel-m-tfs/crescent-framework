@@ -10,9 +10,17 @@ local M = {}
 local function set_header(out, k, v)
     if not k then return end
     k = tostring(k)
-    -- Validação básica de segurança (previne header injection)
-    if k:find("\r") or k:find("\n") or k:find("\0") then return end
-    out[string.lower(k)] = trim(v and tostring(v) or "")
+    -- Validação básica de segurança (previne header injection). Antes só
+    -- validava o NOME do header, nunca o VALOR — is_safe_value() já existia
+    -- pra isso mas nunca era chamada aqui. Hoje o parser HTTP do Luvit
+    -- protege contra CRLF cru sobrevivendo dentro de uma linha de header,
+    -- mas validar os dois lados aqui é defesa em profundidade barata,
+    -- principalmente se esse `out` normalizado for reaproveitado em log/
+    -- proxy/repasse de header no futuro.
+    if k:find("\r") or k:find("\n") or k:find("%z") then return end
+    local value = trim(v and tostring(v) or "")
+    if value:find("\r") or value:find("\n") or value:find("%z") then return end
+    out[string.lower(k)] = value
 end
 
 -- Normaliza headers de diferentes formatos para um formato consistente

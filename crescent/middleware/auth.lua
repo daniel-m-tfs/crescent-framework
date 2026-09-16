@@ -220,14 +220,25 @@ function M.generate_token_pair(user, options)
     
     local access_expires = options.access_expires_in or (15 * 60) -- 15 min
     local refresh_expires = options.refresh_expires_in or (30 * 24 * 60 * 60) -- 30 dias
-    
-    -- Prepara payload do JWT
-    local payload = {
-        user_id = user.id,
-        name = user.name,
-        email = user.email
-    }
-    
+
+    -- Prepara payload do JWT. Aceita `user` como número/string (ID puro,
+    -- como o doc do parâmetro sempre prometeu: "user table|number"), ou
+    -- como tabela com `user_id` (convenção usada em todo o resto da API,
+    -- ex: jwt.create_access_token(payload, secret) com payload cru) ou
+    -- `id` (convenção estilo instância de Model). Antes só `user.id` era
+    -- aceito — passar o payload no formato usado em qualquer outro lugar
+    -- da API produzia um token com user_id=nil, silenciosamente.
+    local payload
+    if type(user) == "number" or type(user) == "string" then
+        payload = { user_id = user }
+    else
+        payload = {
+            user_id = user.user_id or user.id,
+            name = user.name,
+            email = user.email
+        }
+    end
+
     local access_token = jwt.create_access_token(payload, secret, access_expires)
     local refresh_token = jwt.create_refresh_token(payload, secret, refresh_expires)
     

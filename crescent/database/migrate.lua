@@ -65,64 +65,80 @@ function Migrate.run()
     end
     
     local pending = 0
+    local aborted = false
     for file in files:gmatch("[^\r\n]+") do
+        if aborted then break end
+
         local migration_name = file:match("migrations/(.+)%.lua$")
-        
+
         if migration_name and not executed[migration_name] then
             pending = pending + 1
             print(colors.yellow .. "→ Executando: " .. migration_name .. colors.reset)
-            
+
             -- Carrega migration
-            local migration_ok, migration = pcall(require, file:gsub("%.lua$", ""))
-            
-            if not migration_ok then
+            local load_ok, migration = pcall(require, file:gsub("%.lua$", ""))
+
+            if not load_ok then
                 print_error("  Erro ao carregar migration: " .. tostring(migration))
+                aborted = true
                 goto continue
             end
-            
-            -- Executa up()
-            local sql = migration:up()
+
+            if type(migration) ~= "table" or type(migration.up) ~= "function" then
+                print_error("  Migration não implementa up() — pulando o resto do batch")
+                aborted = true
+                goto continue
+            end
+
+            -- Executa up() protegido: uma migration mal escrita não pode
+            -- derrubar o processo inteiro do runner com um erro Lua cru
+            local up_ok, sql = pcall(migration.up, migration)
+            if not up_ok then
+                print_error("  Erro ao executar up(): " .. tostring(sql))
+                aborted = true
+                goto continue
+            end
             if not sql or sql == "" then
                 print_error("  Migration não retornou SQL válido")
+                aborted = true
                 goto continue
             end
-            
+
             -- Mostra preview do SQL
             local sql_preview = sql:gsub("%s+", " "):sub(1, 80)
             print_debug("SQL: " .. sql_preview .. "...")
-            
-            -- Executa SQL
-            local exec_result, exec_err = MySQL:query(sql)
-            if exec_err then
-                print_error("  Erro ao executar SQL: " .. exec_err)
+
+            -- Executa o SQL da migration E o registro em `migrations` como
+            -- UMA transação: ou os dois persistem, ou nenhum. Antes, eram
+            -- duas chamadas separadas — se a segunda (o INSERT de registro)
+            -- falhasse depois do DDL já ter rodado, a migration ficava
+            -- aplicada no banco sem registro, e rodar de novo tentava
+            -- reaplicar o mesmo DDL.
+            local tx_result, tx_err = MySQL.transaction({
+                { sql = sql },
+                { sql = "INSERT INTO migrations (migration, batch) VALUES (?, ?)",
+                  params = { migration_name, current_batch } }
+            })
+
+            if not tx_result then
+                print_error("  Erro ao executar migration: " .. tostring(tx_err))
                 print_debug("SQL completo:")
                 print_debug(sql)
+                aborted = true
                 goto continue
             end
-            
-            print_debug("Resultado do SQL: " .. type(exec_result))
-            if type(exec_result) == "table" and exec_result.affected then
-                print_debug("Linhas afetadas: " .. exec_result.affected)
-            end
-            
-            -- Registra migration como executada
-            local insert_result, insert_err = MySQL:execute(
-                "INSERT INTO migrations (migration, batch) VALUES (?, ?)",
-                { migration_name, current_batch }
-            )
-            if insert_err then
-                print_error("  Erro ao registrar migration: " .. insert_err)
-                goto continue
-            end
-            
+
             print_success("  Executada com sucesso!")
         end
-        
+
         ::continue::
     end
-    
+
     if pending == 0 then
         print_info("Nenhuma migration pendente")
+    elseif aborted then
+        print("")
+        print_error("Batch interrompido por erro — migrations seguintes não foram executadas")
     else
         print("")
         print_success(string.format("Total: %d migration(s) executada(s)", pending))
@@ -158,41 +174,64 @@ function Migrate.rollback()
     end
     
     local rolled_back = 0
+    local aborted = false
     for _, row in ipairs(migrations_result) do
+        if aborted then break end
+
         local migration_name = row.migration
         print(colors.yellow .. "→ Desfazendo: " .. migration_name .. colors.reset)
-        
+
         local file = "migrations/" .. migration_name .. ".lua"
-        local migration_ok, migration = pcall(require, file:gsub("%.lua$", ""))
-        
-        if not migration_ok then
+        local load_ok, migration = pcall(require, file:gsub("%.lua$", ""))
+
+        if not load_ok then
             print_error("  Erro ao carregar migration: " .. tostring(migration))
+            aborted = true
             goto continue
         end
-        
-        -- Executa down()
-        local sql = migration:down()
+
+        if type(migration) ~= "table" or type(migration.down) ~= "function" then
+            print_error("  Migration não implementa down() — abortando rollback")
+            aborted = true
+            goto continue
+        end
+
+        -- Executa down() protegido — mesma razão do up() em Migrate.run()
+        local down_ok, sql = pcall(migration.down, migration)
+        if not down_ok then
+            print_error("  Erro ao executar down(): " .. tostring(sql))
+            aborted = true
+            goto continue
+        end
         if not sql or sql == "" then
             print_error("  Migration não retornou SQL válido para rollback")
+            aborted = true
             goto continue
         end
-        
-        local exec_result, exec_err = MySQL:query(sql)
-        if exec_err then
-            print_error("  Erro ao executar rollback: " .. exec_err)
+
+        -- SQL do rollback + remoção do registro, atômicos (mesma razão do
+        -- Migrate.run(): ver comentário lá)
+        local tx_result, tx_err = MySQL.transaction({
+            { sql = sql },
+            { sql = "DELETE FROM migrations WHERE migration = ?", params = { migration_name } }
+        })
+
+        if not tx_result then
+            print_error("  Erro ao executar rollback: " .. tostring(tx_err))
+            aborted = true
             goto continue
         end
-        
-        -- Remove registro da migration
-        MySQL:execute("DELETE FROM migrations WHERE migration = ?", { migration_name })
-        
+
         rolled_back = rolled_back + 1
         print_success("  Rollback executado!")
-        
+
         ::continue::
     end
-    
+
     print("")
+    if aborted then
+        print_error("Rollback interrompido por erro — migrations seguintes do batch não foram desfeitas")
+    end
     print_success(string.format("Total: %d migration(s) desfeita(s)", rolled_back))
 end
 

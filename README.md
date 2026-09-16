@@ -147,7 +147,7 @@ luvit crescent-cli.lua --help
 ```
 myapp/
 ├── app.lua              # Entry point
-├── bootstrap.lua        # Migration runner
+├── bootstrap.lua        # Module path setup, preloads native Luvit modules
 ├── config/
 │   ├── development.lua  # Dev configuration
 │   └── production.lua   # Production configuration
@@ -213,7 +213,7 @@ local User = Model:extend({
     },
     
     validates = {
-        name = {required = true, min = 3},
+        name = {required = true, min_length = 3},
         email = {required = true, email = true, unique = true}
     }
 })

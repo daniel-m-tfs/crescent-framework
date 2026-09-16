@@ -1,11 +1,29 @@
 local openssl = require('openssl')
 local digest = openssl.digest
 local hmac = openssl.hmac
+local env = require('crescent.utils.env')
 
 local hash = {}
 
--- Configurações padrão
-local DEFAULT_ITERATIONS = 10000
+-- Configurações padrão.
+--
+-- Sobre o valor de DEFAULT_ITERATIONS: a recomendação OWASP atual para
+-- PBKDF2-HMAC-SHA256 é ~600.000 iterações (mínimo defensável ~210.000).
+-- 10.000 (valor anterior) é patamar de ~2013, fraco demais hoje.
+--
+-- MAS: pbkdf2() abaixo é um loop PURO em Lua (chama hmac.digest milhares de
+-- vezes; a binding openssl usada aqui não expõe um PBKDF2 nativo em C) —
+-- e o Luvit é single-thread/event-loop (libuv): cada chamada de
+-- hash.encrypt()/verify() BLOQUEIA o processo inteiro (todas as outras
+-- conexões sendo servidas) pela duração do cálculo. Medido neste ambiente:
+-- ~2.2µs por iteração, ou seja 600k iterações ~= 1.3s de bloqueio total do
+-- event loop POR LOGIN — inaceitável, seria um DoS auto-infligido sob
+-- concorrência. 100.000 (~220ms bloqueando) é um meio-termo mais seguro que
+-- o valor anterior sem travar o servidor inteiro por mais de um instante;
+-- ainda assim, ajuste PASSWORD_HASH_ITERATIONS conforme o hardware/carga
+-- real do seu deploy. O fix correto de verdade seria mover o cálculo pra
+-- fora do event loop principal (thread pool) ou usar um KDF nativo em C.
+local DEFAULT_ITERATIONS = tonumber(env.get("PASSWORD_HASH_ITERATIONS")) or 100000
 local SALT_LENGTH = 16
 local HASH_LENGTH = 32
 
@@ -114,7 +132,13 @@ function hash.verify(password, hashedPassword)
     end
     
     if #parts ~= 3 then
-        error("Invalid hash format", 2)
+        -- Antes lançava erro aqui — mas verify() é fundamentalmente uma
+        -- comparação booleana (mesmo contrato de secureCompare, que retorna
+        -- false), chamada tipicamente como `if hash.verify(pw, stored) then`
+        -- sem pcall. Um hash salvo em formato antigo/corrompido no banco
+        -- não deveria derrubar a request com uma exceção não tratada —
+        -- deveria simplesmente significar "não bate".
+        return false
     end
     
     local iterations = tonumber(parts[1])

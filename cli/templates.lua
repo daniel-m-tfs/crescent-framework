@@ -13,6 +13,15 @@ function M.to_snake_case(str)
     return str:gsub("(%u)", "_%1"):lower():gsub("^_", "")
 end
 
+-- Valida nomes usados para gerar diretórios/arquivos/identificadores Lua
+-- (nomes de projeto, módulo, controller, etc). Só letras, números, "_" e "-",
+-- começando por letra. Isso bloqueia tanto injeção de shell (nomes viram
+-- argumento de os.execute/mkdir/git em alguns comandos) quanto geração de
+-- código Lua inválido (require() com espaços/aspas/etc).
+function M.is_valid_identifier(name)
+    return type(name) == "string" and name:match("^[%a][%w_%-]*$") ~= nil
+end
+
 M.migration = function(name)
     local timestamp = os.date("%Y%m%d%H%M%S")
     local filename = timestamp .. "_" .. name .. ".lua"
@@ -94,18 +103,24 @@ end
 
 function %s:create(ctx)
     local body = ctx.body or {}
-    local result = service:create(body)
-    
-    return ctx.json(201, result)
+    local result, errors = service:create(body)
+
+    if result then
+        return ctx.json(201, result)
+    end
+
+    return ctx.json(422, { error = "Validation failed", details = errors })
 end
 
 function %s:update(ctx)
     local id = ctx.params.id
     local body = ctx.body or {}
-    local result = service:update(id, body)
-    
+    local result, errors = service:update(id, body)
+
     if result then
         return ctx.json(200, result)
+    elseif errors then
+        return ctx.json(422, { error = "Validation failed", details = errors })
     else
         return ctx.json(404, { error = "Not found" })
     end
@@ -132,6 +147,7 @@ M.service = function(name, module_name)
     local class_name = M.capitalize(name) .. "Service"
     local model_name = M.capitalize(name)
     local model_file = M.to_snake_case(name)
+    local var_name = model_file
     return string.format([[-- src/%s/services/%s.lua
 -- Service para lógica de negócio de %s
 
@@ -147,16 +163,21 @@ function %s:getById(id)
 end
 
 function %s:create(body)
-   return %s:create(body)
+    return %s:create(body)
 end
 
 function %s:update(id, body)
     local %s = %s:find(id)
-    if %s then
-        %s:update(body)
-        return %s
+    if not %s then
+        return nil, nil
     end
-    return nil
+
+    local ok, err = %s:update(body)
+    if not ok then
+        return nil, err
+    end
+
+    return %s
 end
 
 function %s:delete(id)
@@ -169,15 +190,16 @@ function %s:delete(id)
 end
 
 return %s
-]], module_name, M.to_snake_case(name), name,
+]], module_name, model_file, name,
     class_name, model_name, module_name, model_file,
     class_name, model_name,
     class_name, model_name,
     class_name, model_name,
-    class_name, M.to_snake_case(name), model_name, M.to_snake_case(name),
-    M.to_snake_case(name), M.to_snake_case(name),
-    class_name, M.to_snake_case(name), model_name, M.to_snake_case(name),
-    M.to_snake_case(name),
+    class_name, var_name, model_name, var_name,
+    var_name,
+    var_name,
+    class_name, var_name, model_name, var_name,
+    var_name,
     class_name)
 end
 

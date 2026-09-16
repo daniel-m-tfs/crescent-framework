@@ -61,15 +61,18 @@ function M.json(res, status, obj, extra_headers)
         end
     end
     
-    res:writeHead(status or 200)
-    
-    -- Serializa Models automaticamente
+    -- Serializa ANTES de escrever o header de status — se a serialização
+    -- falhar, precisamos poder responder com um status de erro real (500)
+    -- em vez de já ter commitado o status de sucesso original e mandar um
+    -- corpo de erro com um código 200 (writeHead não pode ser desfeito).
     local serialized = serialize_data(obj)
-    
     local ok, encoded = pcall(json.stringify, serialized)
+
     if ok then
+        res:writeHead(status or 200)
         res:finish(encoded)
     else
+        res:writeHead(500)
         res:finish('{"error":"json encoding error"}')
     end
 end

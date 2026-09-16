@@ -8,7 +8,10 @@ local b64lookup = {}
 for i = 1, #b64chars do
   b64lookup[b64chars:sub(i, i)] = i - 1
 end
-b64lookup["="] = 0
+-- "=" NÃO entra no lookup como um caractere de dado válido (era o bug: com
+-- b64lookup["="]=0, um "=" fora de posição virava silenciosamente um "A" em
+-- vez de invalidar o decode). É tratado explicitamente em M.decode() como
+-- padding, só permitido nas duas últimas posições do ÚLTIMO grupo de 4.
 
 function M.encode(data)
   local out = {}
@@ -47,15 +50,30 @@ end
 
 function M.decode(data)
   data = data:gsub("%s", "")
+  if #data == 0 then return "" end
   if (#data % 4) ~= 0 then return nil end
 
   local out = {}
+  local len = #data
   local i = 1
-  while i <= #data do
-    local c1 = b64lookup[data:sub(i, i)]
-    local c2 = b64lookup[data:sub(i + 1, i + 1)]
-    local c3 = b64lookup[data:sub(i + 2, i + 2)]
-    local c4 = b64lookup[data:sub(i + 3, i + 3)]
+  while i <= len do
+    local is_last_group = (i + 3 == len)
+    local ch1 = data:sub(i, i)
+    local ch2 = data:sub(i + 1, i + 1)
+    local ch3 = data:sub(i + 2, i + 2)
+    local ch4 = data:sub(i + 3, i + 3)
+
+    -- "=" só é válido nas duas últimas posições do ÚLTIMO grupo de 4 (e só
+    -- como sufixo: "X=" ou "==", nunca "=X"). Qualquer outra ocorrência
+    -- invalida o decode em vez de ser silenciosamente tratada como dado.
+    if ch1 == "=" or ch2 == "=" then return nil end
+    if (ch3 == "=" or ch4 == "=") and not is_last_group then return nil end
+    if ch3 == "=" and ch4 ~= "=" then return nil end
+
+    local c1 = b64lookup[ch1]
+    local c2 = b64lookup[ch2]
+    local c3 = (ch3 == "=") and 0 or b64lookup[ch3]
+    local c4 = (ch4 == "=") and 0 or b64lookup[ch4]
     if c1 == nil or c2 == nil or c3 == nil or c4 == nil then return nil end
 
     local triple = c1 * 262144 + c2 * 4096 + c3 * 64 + c4
@@ -64,8 +82,8 @@ function M.decode(data)
     local c = triple % 256
 
     out[#out + 1] = string.char(a)
-    if data:sub(i + 2, i + 2) ~= "=" then out[#out + 1] = string.char(b) end
-    if data:sub(i + 3, i + 3) ~= "=" then out[#out + 1] = string.char(c) end
+    if ch3 ~= "=" then out[#out + 1] = string.char(b) end
+    if ch4 ~= "=" then out[#out + 1] = string.char(c) end
 
     i = i + 4
   end

@@ -94,3 +94,6 @@ secrets/
 *.crt
 !config/*.key.example
 luarocks/
+
+# Working notes (never committed)
+TODO.md

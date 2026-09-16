@@ -7,6 +7,7 @@ local print_header = cli_output.print_header
 local print_error = cli_output.print_error
 local print_info = cli_output.print_info
 local print_success = cli_output.print_success
+local templates = require('cli.templates')
 
 local M = {}
 
@@ -17,9 +18,16 @@ function M.run(project_name)
         return
     end
 
+    if not templates.is_valid_identifier(project_name) then
+        print_error("Nome de projeto inválido: '" .. project_name .. "'")
+        print_info("Use apenas letras, números, '_' e '-', começando por uma letra.")
+        return
+    end
+
     print_header("Criando novo projeto Crescent: " .. project_name)
 
-    -- Verifica se diretório já existe
+    -- Verifica se diretório já existe. Seguro contra shell injection porque
+    -- project_name já foi validado acima (só [%a][%w_%-]*).
     local check_cmd = string.format('test -d "%s"', project_name)
     local exists = os.execute(check_cmd) == 0
 

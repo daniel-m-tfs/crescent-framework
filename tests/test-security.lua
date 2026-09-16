@@ -107,6 +107,20 @@ local securityTests = {
         tests.assertNil(base64.decode("not-valid-base64!!"), "entrada inválida deve retornar nil, não erro")
     end,
 
+    testeBase64DecodeRejectsMisplacedPadding = function()
+        -- Regressão: b64lookup["="]=0 fazia um "=" fora de posição virar
+        -- silenciosamente um "A" em vez de invalidar o decode.
+        tests.assertNil(base64.decode("=AAA"), "'=' na 1a posição deve invalidar")
+        tests.assertNil(base64.decode("A=AA"), "'=' na 2a posição deve invalidar")
+        tests.assertNil(base64.decode("AA=A"), "'=' seguido de caractere de dado deve invalidar")
+        tests.assertNotNil(base64.decode("AA=="), "padding válido no final deve continuar funcionando")
+        tests.assertNotNil(base64.decode("AAA="), "padding válido no final deve continuar funcionando")
+    end,
+
+    testeBase64EmptyStringRoundTrip = function()
+        tests.assertEquals(base64.decode(base64.encode("")), "", "string vazia deve fazer round-trip")
+    end,
+
     testeBasicAuthDecodesRealCredentials = function()
         local credentials = base64.encode("admin:s3cr3t!")
         local ctx = mock_ctx({
@@ -154,16 +168,26 @@ local securityTests = {
 
     testeJoinEscapesIdentifiers = function()
         local sql = QB.table("orders")
-            :join("users; DROP TABLE users; --", "orders.user_id", "=", "users.id")
+            :join("other_table", "orders.user_id", "=", "users.id")
             :toSql()
 
         tests.assertContains(sql, "`orders`.`user_id`", "coluna do JOIN deve ser escapada")
         tests.assertContains(sql, "`users`.`id`", "coluna do JOIN deve ser escapada")
-        -- O payload malicioso deve ficar contido como um único identificador entre
-        -- backticks (inofensivo: MySQL tentaria abrir uma tabela com esse nome
-        -- literal e falharia), nunca "escapar" para virar uma segunda instrução SQL
-        tests.assertContains(sql, "`users; DROP TABLE users; --`",
-            "identificador malicioso deve virar um único token entre backticks, não SQL executável")
+    end,
+
+    testeJoinRejectsMaliciousIdentifier = function()
+        -- escape_identifier() agora valida cada segmento contra uma whitelist
+        -- (letras/números/underscore) e rejeita com erro em vez de aceitar
+        -- silenciosamente um identificador malicioso entre backticks.
+        local ok, err = pcall(function()
+            return QB.table("orders")
+                :join("users; DROP TABLE users; --", "orders.user_id", "=", "users.id")
+                :toSql()
+        end)
+
+        tests.assertFalse(ok, "identificador malicioso em JOIN deve lançar erro, não virar SQL")
+        tests.assertContains(tostring(err), "Invalid SQL identifier",
+            "erro deve indicar identificador inválido")
     end,
 
     testeOrderByEscapesIdentifierAndWhitelistsDirection = function()
@@ -177,6 +201,25 @@ local securityTests = {
     testeOrderByAcceptsDesc = function()
         local sql = QB.table("users"):orderBy("created_at", "DESC"):toSql()
         tests.assertMatches(sql, "ORDER BY `created_at` DESC$", "DESC explícito deve ser preservado")
+    end,
+
+    testeEscapeValueRemovesNullBytes = function()
+        -- "\0" literal dentro de gsub NÃO casa nada nesta engine Lua/LuaJIT
+        -- (silenciosamente vira no-op) — precisa ser "%z". Regressão direta
+        -- de um bug de segurança real (SECURITY.md promete essa remoção).
+        local escaped = sql_escape.escape_value("abc\0def")
+        tests.assertNotContains(escaped, "\0", "byte nulo deve ser removido do valor escapado")
+        tests.assertEquals(escaped, "'abcdef'", "byte nulo deve ser removido, resto do valor preservado")
+    end,
+
+    testeEscapeIdentifierRejectsInvalidCharacters = function()
+        local ok = pcall(sql_escape.escape_identifier, "id; DROP TABLE users; --")
+        tests.assertFalse(ok, "identificador com caracteres fora da whitelist deve ser rejeitado")
+    end,
+
+    testeEscapeIdentifierAcceptsQualifiedName = function()
+        local escaped = sql_escape.escape_identifier("users.id")
+        tests.assertEquals(escaped, "`users`.`id`", "identificador qualificado válido deve ser aceito normalmente")
     end,
 }
 

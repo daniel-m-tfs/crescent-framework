@@ -3,6 +3,7 @@
 
 local response = require("crescent.core.response")
 local string_utils = require("crescent.utils.string")
+local path_utils = require("crescent.utils.path")
 
 local M = {}
 
@@ -24,6 +25,13 @@ function M.rate_limit(options)
     local window = options.window or 60 -- segundos
     local max_requests = options.max_requests or 100
     local sweep_every = options.sweep_every or 1000 -- requisições entre sweeps
+    -- Por padrão NÃO confia em X-Forwarded-For/X-Real-IP: qualquer cliente
+    -- direto (sem proxy de verdade na frente) pode setar esses headers à
+    -- vontade e trocar de "IP" a cada request, resetando o próprio bucket
+    -- de rate limit — bypass trivial. Só olha esses headers se o app
+    -- explicitamente confirmar que roda atrás de um proxy confiável que os
+    -- popula de forma segura (nginx, load balancer, etc.).
+    local trust_proxy = options.trust_proxy or false
     local requests = {} -- {ip: {count, reset_time}}
     local requests_seen = 0
 
@@ -38,11 +46,17 @@ function M.rate_limit(options)
     end
 
     return function(ctx, next)
-        -- Obtém IP (considera X-Forwarded-For se atrás de proxy)
-        local ip = ctx.getHeader("x-forwarded-for") or
-                   ctx.getHeader("x-real-ip") or
-                   ctx.req.socket.remoteAddress or
-                   "unknown"
+        -- Obtém IP. Só olha X-Forwarded-For/X-Real-IP quando trust_proxy
+        -- está explicitamente ligado (ver comentário acima).
+        local ip
+        if trust_proxy then
+            ip = ctx.getHeader("x-forwarded-for") or
+                 ctx.getHeader("x-real-ip") or
+                 ctx.req.socket.remoteAddress or
+                 "unknown"
+        else
+            ip = ctx.req.socket.remoteAddress or "unknown"
+        end
 
         local now = os.time()
 
@@ -105,14 +119,16 @@ function M.body_size_limit(max_size)
     end
 end
 
--- Proteção contra path traversal
+-- Proteção contra path traversal. Reusa path_utils.is_safe() (mesma fonte
+-- usada por static.lua) em vez de uma checagem duplicada e incompleta que
+-- só olhava "..", sem checar bytes nulos.
 function M.path_traversal()
     return function(ctx, next)
-        if ctx.path:find("..", 1, true) then
+        if not path_utils.is_safe(ctx.path) then
             ctx.error(400, "invalid path")
             return false
         end
-        
+
         if next then
             return next()
         end

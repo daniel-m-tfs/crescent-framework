@@ -137,14 +137,23 @@ local User = Model:extend({
             email = true,  -- Valida formato de e-mail
             max_length = 255
         },
-        age = {
-            numeric = true,
-            min = 0,
-            max = 150
+        username = {
+            required = true,
+            min_length = 3,
+            max_length = 30,
+            unique = true  -- checagem TOCTOU via SELECT antes do INSERT/UPDATE;
+                           -- para garantia real, crie também uma constraint
+                           -- UNIQUE na migration da tabela
         }
     }
 })
 ```
+
+Regras suportadas hoje por `Model:validate()`: `required`, `min_length`, `max_length`
+(contam caracteres, não bytes — texto UTF-8 acentuado funciona corretamente),
+`email` e `unique`. Não existe validação numérica (`min`/`max`), regex
+customizada ou enum — se precisar disso, valide manualmente antes de chamar
+`create()`/`update()`.
 
 ## Limitações Conhecidas
 

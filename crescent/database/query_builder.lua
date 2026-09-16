@@ -200,46 +200,66 @@ function QueryBuilder:paginate(page, per_page)
     return self
 end
 
+-- Constrói só a cláusula WHERE (com o "WHERE " na frente), a partir de
+-- self._wheres diretamente — usado tanto por toSql() quanto por update()/
+-- delete(), que precisam do WHERE sem o resto do SELECT. Nunca extrai isso
+-- via regex sobre SQL final (um valor contendo "ORDER BY"/"LIMIT" corromperia
+-- a extração).
+function QueryBuilder:_buildWhereClause()
+    if #self._wheres == 0 then
+        return ""
+    end
+
+    local where_clauses = {}
+    for i, where in ipairs(self._wheres) do
+        local clause
+
+        if where.operator == "IN" then
+            if #where.value == 0 then
+                -- IN () é erro de sintaxe no MySQL; uma lista vazia nunca
+                -- deve casar nada, então usa uma condição sempre falsa.
+                clause = "1 = 0"
+            else
+                local values = {}
+                for _, v in ipairs(where.value) do
+                    table.insert(values, self:_escapeValue(v))
+                end
+                clause = string.format("%s IN (%s)", self:_escapeIdentifier(where.column), table.concat(values, ", "))
+            end
+        elseif where.operator == "IS NULL" or where.operator == "IS NOT NULL" then
+            clause = string.format("%s %s", self:_escapeIdentifier(where.column), where.operator)
+        else
+            clause = string.format("%s %s %s",
+                self:_escapeIdentifier(where.column), where.operator, self:_escapeValue(where.value))
+        end
+
+        if i == 1 then
+            table.insert(where_clauses, "WHERE " .. clause)
+        else
+            table.insert(where_clauses, where.type .. " " .. clause)
+        end
+    end
+    return table.concat(where_clauses, " ")
+end
+
 -- Constrói SQL
 function QueryBuilder:toSql()
     local sql = "SELECT " .. table.concat(self._selects, ", ")
     sql = sql .. " FROM " .. self._table
-    
+
     -- JOINs
     for _, join in ipairs(self._joins) do
         sql = sql .. string.format(" %s JOIN %s ON %s %s %s",
             join.type, self:_escapeIdentifier(join.table), self:_escapeIdentifier(join.first),
             join.operator, self:_escapeIdentifier(join.second))
     end
-    
+
     -- WHEREs
-    if #self._wheres > 0 then
-        local where_clauses = {}
-        for i, where in ipairs(self._wheres) do
-            local clause
-            
-            if where.operator == "IN" then
-                local values = {}
-                for _, v in ipairs(where.value) do
-                    table.insert(values, self:_escapeValue(v))
-                end
-                clause = string.format("%s IN (%s)", self:_escapeIdentifier(where.column), table.concat(values, ", "))
-            elseif where.operator == "IS NULL" or where.operator == "IS NOT NULL" then
-                clause = string.format("%s %s", self:_escapeIdentifier(where.column), where.operator)
-            else
-                clause = string.format("%s %s %s", 
-                    self:_escapeIdentifier(where.column), where.operator, self:_escapeValue(where.value))
-            end
-            
-            if i == 1 then
-                table.insert(where_clauses, "WHERE " .. clause)
-            else
-                table.insert(where_clauses, where.type .. " " .. clause)
-            end
-        end
-        sql = sql .. " " .. table.concat(where_clauses, " ")
+    local where_clause = self:_buildWhereClause()
+    if where_clause ~= "" then
+        sql = sql .. " " .. where_clause
     end
-    
+
     -- ORDER BY
     if #self._orderBy > 0 then
         local orders = {}
@@ -296,11 +316,9 @@ function QueryBuilder:get()
         return results
     end
     
-    -- Fallback: modo mock
-    print("⚠️  [MOCK] SQL:", sql)
-    return {
-        note = "Mock result - instale luasql-mysql para queries reais"
-    }
+    -- Sem driver instalado: NÃO finge sucesso (ver comentário em update()).
+    print("⚠️  [SEM DRIVER] Nada foi executado. SQL que seria rodado:", sql)
+    return nil, "Driver MySQL não instalado. Execute: luarocks install luasql-mysql"
 end
 
 function QueryBuilder:first()
@@ -315,9 +333,19 @@ function QueryBuilder:first()
 end
 
 function QueryBuilder:count()
+    -- Não muta self._selects permanentemente: count() precisa poder ser
+    -- chamado numa instância que ainda vai ser reusada (API é fluente/
+    -- encadeável, e mutar _selects aqui faria qualquer .get() seguinte
+    -- também virar COUNT(*)).
+    local original_selects = self._selects
     self._selects = {"COUNT(*) as count"}
-    local results = self:get()
-    return results[1] and results[1].count or 0
+    local results, err = self:get()
+    self._selects = original_selects
+
+    if err or not results or not results[1] then
+        return 0, err
+    end
+    return tonumber(results[1].count) or 0
 end
 
 -- INSERT
@@ -346,9 +374,11 @@ function QueryBuilder:insert(data)
         return id
     end
     
-    -- Fallback: modo mock (retorna ID diretamente)
-    print("⚠️  [MOCK] SQL:", sql)
-    return 1  -- Retorna apenas o ID no modo mock
+    -- Sem driver instalado: NÃO finge sucesso (ver comentário em update()).
+    -- Retornar um ID fake (ex: 1) faria Model:create() achar que inseriu de
+    -- verdade quando nada foi persistido — perda de dados silenciosa.
+    print("⚠️  [SEM DRIVER] Nada foi inserido. SQL que seria rodado:", sql)
+    return nil, "Driver MySQL não instalado. Execute: luarocks install luasql-mysql"
 end
 
 -- UPDATE
@@ -360,17 +390,12 @@ function QueryBuilder:update(data)
     end
     
     local sql = string.format("UPDATE %s SET %s", self._table, table.concat(sets, ", "))
-    
-    if #self._wheres > 0 then
-        -- Adiciona WHERE (reutiliza lógica do toSql)
-        local temp_sql = self:toSql()
-        local where_part = temp_sql:match("WHERE.+")
-        if where_part then
-            where_part = where_part:gsub("ORDER BY.+", ""):gsub("LIMIT.+", "")
-            sql = sql .. " " .. where_part
-        end
+
+    local where_clause = self:_buildWhereClause()
+    if where_clause ~= "" then
+        sql = sql .. " " .. where_clause
     end
-    
+
     -- Se MySQL disponível E driver instalado, executa
     if mysql_available and mysql_driver_available and MySQL then
         local result, err = MySQL:update(sql)
@@ -380,28 +405,23 @@ function QueryBuilder:update(data)
         end
         return result
     end
-    
-    -- Fallback: modo mock
-    print("⚠️  [MOCK] SQL:", sql)
-    return {
-        affected = 1,
-        note = "Mock result - instale luasql-mysql"
-    }
+
+    -- Sem driver instalado: NÃO finge sucesso. Um retorno com a mesma forma
+    -- de sucesso (affected=1) faria o caller (ex: Model:update()) achar que
+    -- persistiu quando na verdade nada foi escrito no banco.
+    print("⚠️  [SEM DRIVER] Nada foi executado. SQL que seria rodado:", sql)
+    return nil, "Driver MySQL não instalado. Execute: luarocks install luasql-mysql"
 end
 
 -- DELETE
 function QueryBuilder:delete()
     local sql = "DELETE FROM " .. self._table
-    
-    if #self._wheres > 0 then
-        local temp_sql = self:toSql()
-        local where_part = temp_sql:match("WHERE.+")
-        if where_part then
-            where_part = where_part:gsub("ORDER BY.+", ""):gsub("LIMIT.+", "")
-            sql = sql .. " " .. where_part
-        end
+
+    local where_clause = self:_buildWhereClause()
+    if where_clause ~= "" then
+        sql = sql .. " " .. where_clause
     end
-    
+
     -- Se MySQL disponível E driver instalado, executa
     if mysql_available and mysql_driver_available and MySQL then
         local result, err = MySQL:delete(sql)
@@ -411,13 +431,10 @@ function QueryBuilder:delete()
         end
         return result
     end
-    
-    -- Fallback: modo mock
-    print("⚠️  [MOCK] SQL:", sql)
-    return {
-        affected = 1,
-        note = "Mock result - instale luasql-mysql"
-    }
+
+    -- Sem driver instalado: NÃO finge sucesso (ver comentário em update()).
+    print("⚠️  [SEM DRIVER] Nada foi executado. SQL que seria rodado:", sql)
+    return nil, "Driver MySQL não instalado. Execute: luarocks install luasql-mysql"
 end
 
 -- Funções estáticas de conveniência
@@ -458,16 +475,9 @@ function M.raw(sql, bindings)
         return results
     end
     
-    -- Fallback: modo mock
-    print("⚠️  [MOCK] SQL (raw):", sql)
-    if #bindings > 0 then
-        print("⚠️  [MOCK] Bindings:", table.concat(bindings, ", "))
-    end
-    return {
-        sql = sql,
-        bindings = bindings,
-        note = "Mock result - instale luasql-mysql para queries reais"
-    }
+    -- Sem driver instalado: NÃO finge sucesso (ver comentário em update()).
+    print("⚠️  [SEM DRIVER] Nada foi executado. SQL que seria rodado (raw):", sql)
+    return nil, "Driver MySQL não instalado. Execute: luarocks install luasql-mysql"
 end
 
 -- Alias para raw (convenção)

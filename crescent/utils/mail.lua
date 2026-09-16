@@ -1,10 +1,27 @@
 -- Email Library for Crescent Framework
 -- Provides an easy-to-use interface for sending emails via SMTP
 -- Supports: HTML/plain text, attachments, templates, multiple recipients
-
-local smtp = require("socket.smtp")
-local ltn12 = require("ltn12")
-local mime = require("mime")
+--
+-- DEPENDÊNCIAS EXTERNAS (luarocks, não vêm com o Luvit):
+--   luarocks install luasocket luasec
+-- Sem isso instalado, require("crescent.utils.mail") falha com um erro
+-- claro (ver pcall abaixo) em vez de um stack trace críptico de "module
+-- not found" no meio da inicialização da app.
+--
+-- ATENÇÃO — I/O BLOQUEANTE: luasocket/socket.smtp são bibliotecas SÍNCRONAS
+-- (bloqueantes). O Luvit é um runtime assíncrono single-thread (libuv) —
+-- diferente de http.lua (que foi reescrito para usar os módulos nativos
+-- assíncronos do Luvit), este módulo NÃO tem equivalente nativo pronto pra
+-- SMTP, então enviar um e-mail aqui trava o event loop inteiro (todas as
+-- outras conexões sendo servidas pelo mesmo processo) pelo tempo que durar
+-- a conversa SMTP. Evite chamar isso direto num handler de rota sob tráfego
+-- real; prefira mover para um worker/fila separado do processo do servidor.
+local smtp_ok, smtp = pcall(require, "socket.smtp")
+local ltn12_ok, ltn12 = pcall(require, "ltn12")
+local mime_ok, mime = pcall(require, "mime")
+if not (smtp_ok and ltn12_ok and mime_ok) then
+    error("crescent.utils.mail requer luasocket instalado via luarocks. Execute: luarocks install luasocket luasec")
+end
 local env = require("crescent.utils.env")
 
 local Mail = {}
@@ -278,7 +295,10 @@ function Mail:verify()
     end
     
     -- Try to send a test connection (without actually sending email)
-    local socket = require("socket")
+    local ok_socket, socket = pcall(require, "socket")
+    if not ok_socket then
+        return false, "luasocket não instalado. Execute: luarocks install luasocket luasec"
+    end
     local client = socket.tcp()
     client:settimeout(10)
     

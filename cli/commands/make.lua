@@ -12,7 +12,9 @@ local templates = require('cli.templates')
 
 local M = {}
 
--- Cria diretório se não existir
+-- Cria diretório se não existir. dir é sempre montado a partir de nomes já
+-- validados por validate_names() (só [%a][%w_%-]*), então é seguro contra
+-- shell injection interpolar aqui.
 local function ensure_dir(dir)
     local cmd = string.format('mkdir -p "%s"', dir)
     os.execute(cmd)
@@ -29,7 +31,22 @@ local function write_file(filepath, content)
     return false
 end
 
+-- Valida name/module_name antes de qualquer uso (path, require(), shell) —
+-- ver templates.is_valid_identifier. Imprime erro e retorna false se inválido.
+local function validate_names(name, module_name)
+    if not templates.is_valid_identifier(name) then
+        print_error("Nome inválido: '" .. tostring(name) .. "'. Use apenas letras, números, '_' e '-', começando por uma letra.")
+        return false
+    end
+    if module_name ~= nil and not templates.is_valid_identifier(module_name) then
+        print_error("Nome de módulo inválido: '" .. tostring(module_name) .. "'. Use apenas letras, números, '_' e '-', começando por uma letra.")
+        return false
+    end
+    return true
+end
+
 function M.controller(name, module_name)
+    if not validate_names(name, module_name) then return end
     module_name = module_name or templates.to_snake_case(name)
     local dir = string.format("src/%s/controllers", module_name)
     ensure_dir(dir)
@@ -45,6 +62,7 @@ function M.controller(name, module_name)
 end
 
 function M.service(name, module_name)
+    if not validate_names(name, module_name) then return end
     module_name = module_name or templates.to_snake_case(name)
     local dir = string.format("src/%s/services", module_name)
     ensure_dir(dir)
@@ -60,6 +78,7 @@ function M.service(name, module_name)
 end
 
 function M.model(name, module_name)
+    if not validate_names(name, module_name) then return end
     module_name = module_name or templates.to_snake_case(name)
     local dir = string.format("src/%s/models", module_name)
     ensure_dir(dir)
@@ -75,6 +94,7 @@ function M.model(name, module_name)
 end
 
 function M.routes(name, module_name)
+    if not validate_names(name, module_name) then return end
     module_name = module_name or templates.to_snake_case(name)
     local dir = string.format("src/%s/routes", module_name)
     ensure_dir(dir)
@@ -90,6 +110,7 @@ function M.routes(name, module_name)
 end
 
 function M.module(name)
+    if not validate_names(name) then return end
     local module_name = templates.to_snake_case(name)
     local dir = string.format("src/%s", module_name)
     ensure_dir(dir)
@@ -119,6 +140,7 @@ end
 
 -- Migration commands
 function M.migration(name)
+    if not validate_names(name) then return end
     ensure_dir("migrations")
 
     local filename, content = templates.migration(name)

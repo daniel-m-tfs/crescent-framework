@@ -46,7 +46,12 @@ if not package.__crescent_bootstrapped then
   package.__crescent_bootstrapped = true
 end
 
--- Pré-carrega módulos do Luvit (se disponíveis)
+-- Pré-carrega módulos do Luvit (se disponíveis). Precisa ser feito aqui, no
+-- contexto de require do script principal — módulos nativos como "https" e
+-- "timer" não resolvem de forma confiável quando requeridos de dentro de um
+-- módulo carregado via o resolvedor pontilhado do Luvit (require("crescent.
+-- xxx.yyy")); código em crescent/* deve ler _G._https/_G._timer em vez de
+-- fazer require("https")/require("timer") diretamente.
 local success, http = pcall(require, "http")
 if success then
   _G._http = http
@@ -54,3 +59,21 @@ if success then
   _G._querystring = require("querystring")
   _G._json = require("json")
 end
+
+local https_ok, https = pcall(require, "https")
+if https_ok then
+  _G._https = https
+end
+
+local timer_ok, timer_mod = pcall(require, "timer")
+if timer_ok then
+  _G._timer = timer_mod
+end
+
+-- math.randomseed() nunca era chamado em lugar nenhum do framework, então
+-- math.random() produzia a MESMA sequência determinística a cada novo
+-- processo (usado hoje em crescent.utils.mail pra message-id/boundary MIME
+-- — não é uso criptográfico, mas ainda assim não deveria ser previsível
+-- entre processos). Não usar como fonte de aleatoriedade criptográfica em
+-- nenhum contexto — para isso, ver crescent/utils/hash.lua (usa openssl).
+math.randomseed(os.time() + (os.clock() * 1000))

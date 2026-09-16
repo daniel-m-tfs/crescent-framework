@@ -4,6 +4,21 @@
 
 local M = {}
 
+-- Conta caracteres (não bytes) de uma string UTF-8. #str conta bytes, o que
+-- quebra min_length/max_length pra qualquer texto acentuado (ex: "café" tem
+-- 4 caracteres mas 5 bytes, porque "é" ocupa 2 bytes em UTF-8). Só conta
+-- bytes que NÃO são continuação de um caractere multi-byte (0x80-0xBF).
+local function utf8_length(str)
+    local len = 0
+    for i = 1, #str do
+        local byte = str:byte(i)
+        if byte < 0x80 or byte >= 0xC0 then
+            len = len + 1
+        end
+    end
+    return len
+end
+
 function M.validate(self)
     if not self._validates or not next(self._validates) then
         return true
@@ -11,32 +26,46 @@ function M.validate(self)
 
     local errors = {}
 
+    -- Acumula mensagens por campo em vez de sobrescrever: um campo pode
+    -- falhar mais de uma regra ao mesmo tempo (ex: min_length E unique), e
+    -- a versão anterior descartava todas as mensagens menos a última.
+    local function add_error(field, message)
+        if errors[field] then
+            errors[field] = errors[field] .. "; " .. message
+        else
+            errors[field] = message
+        end
+    end
+
     for field, rules in pairs(self._validates) do
         local value = self._attributes[field]
 
         -- Required
         if rules.required and (not value or value == "") then
-            errors[field] = field .. " is required"
+            add_error(field, field .. " is required")
         end
 
-        -- Min length
-        if rules.min_length and value and #tostring(value) < rules.min_length then
-            errors[field] = field .. " must be at least " .. rules.min_length .. " characters"
+        -- Min length (conta caracteres UTF-8, não bytes — ver utf8_length)
+        if rules.min_length and value and utf8_length(tostring(value)) < rules.min_length then
+            add_error(field, field .. " must be at least " .. rules.min_length .. " characters")
         end
 
-        -- Max length
-        if rules.max_length and value and #tostring(value) > rules.max_length then
-            errors[field] = field .. " must be at most " .. rules.max_length .. " characters"
+        -- Max length (idem)
+        if rules.max_length and value and utf8_length(tostring(value)) > rules.max_length then
+            add_error(field, field .. " must be at most " .. rules.max_length .. " characters")
         end
 
         -- Email
         if rules.email and value then
             if not string.match(value, "^[%w._%+-]+@[%w.-]+%.%w+$") then
-                errors[field] = field .. " must be a valid email"
+                add_error(field, field .. " must be a valid email")
             end
         end
 
-        -- Unique (verifica no banco)
+        -- Unique (verifica no banco). Nota: é uma checagem TOCTOU, não uma
+        -- garantia real de unicidade — duas requisições concorrentes podem
+        -- passar aqui simultaneamente. Para garantia real, crie uma
+        -- constraint UNIQUE na migration da tabela.
         if rules.unique and value then
             local query = self:query():where(field, value)
 
@@ -48,7 +77,7 @@ function M.validate(self)
 
             local exists = query:first()
             if exists then
-                errors[field] = field .. " already exists"
+                add_error(field, field .. " already exists")
             end
         end
     end

@@ -142,31 +142,40 @@ function Server:group(prefix, fn)
     return self
 end
 
--- Executa cadeia de middlewares
+-- Executa cadeia de middlewares.
+-- Retorna (ok, err, halted):
+--   true, nil, false    -> cadeia completou normalmente
+--   false, err, false   -> exceção Lua real dentro de um middleware
+--   false, nil, true    -> um middleware parou a cadeia intencionalmente
+--                          (return false, o mecanismo OFICIAL de halt usado
+--                          por auth/cors/security) — isso NÃO é um erro.
+-- Antes, "parada intencional" e "exceção real" colapsavam no mesmo
+-- `ok=false`, então todo 401/403/429 legítimo acionava self.error_handler
+-- com err=nil como se fosse um erro não tratado.
 local function run_middlewares(middlewares, ctx, index)
     index = index or 1
-    
+
     if index > #middlewares then
         return true
     end
-    
+
     local middleware = middlewares[index]
-    
+
     local next_fn = function()
         return run_middlewares(middlewares, ctx, index + 1)
     end
-    
+
     local ok, result = pcall(middleware, ctx, next_fn)
-    
+
     if not ok then
-        return false, result
+        return false, result, false
     end
-    
-    -- Se middleware retornou false, parar a cadeia
+
+    -- Se middleware retornou false, parou a cadeia intencionalmente
     if result == false then
-        return false  -- Retorna false para indicar que parou
+        return false, nil, true
     end
-    
+
     -- Continua
     return true
 end
@@ -185,9 +194,10 @@ function Server:_handle_request(req, res)
     
     -- Executa middlewares ANTES de procurar rotas (para arquivos estáticos)
     if #self.middlewares > 0 then
-        local ok, err = run_middlewares(self.middlewares, ctx)
-        
-        if not ok then
+        local ok, err, halted = run_middlewares(self.middlewares, ctx)
+
+        if not ok and not halted then
+            -- Exceção real dentro de um middleware
             if self.error_handler then
                 pcall(self.error_handler, ctx, err)
             else
@@ -195,9 +205,9 @@ function Server:_handle_request(req, res)
             end
             return
         end
-        
-        -- Se middleware parou (retornou false), resposta foi finalizada
-        if err == false or res.finished then
+
+        -- Middleware parou a cadeia intencionalmente (halt) ou já respondeu
+        if halted or res.finished then
             return
         end
     end

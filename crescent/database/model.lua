@@ -45,6 +45,26 @@ end
 
 -- Cria nova instância do model (não salva no DB)
 function Model:new(attributes)
+    attributes = attributes or {}
+
+    -- Aviso (não bloqueia): __index abaixo dá prioridade a métodos do Model
+    -- sobre atributos — uma coluna chamada "save"/"delete"/"update"/"get"/
+    -- "query"/etc. fica inacessível via `instance.coluna` (sempre resolve
+    -- pro método). Não dá pra simplesmente inverter essa prioridade sem
+    -- risco pior (uma coluna string chamada "save" faria `instance:save()`
+    -- tentar chamar uma string, quebrando toda instância). Só avisa, pra
+    -- não ser uma armadilha silenciosa — use instance:get("coluna") pra
+    -- essas colunas.
+    for key in pairs(attributes) do
+        if type(key) == "string" and self[key] ~= nil then
+            print(string.format(
+                "⚠️  Model:new() — atributo '%s' colide com um método do Model. " ..
+                "instance.%s sempre vai resolver pro método; use instance:get('%s') para o valor da coluna.",
+                key, key, key
+            ))
+        end
+    end
+
     local instance = setmetatable({}, {
         __index = function(t, key)
             -- Primeiro tenta acessar métodos do Model
@@ -67,7 +87,7 @@ function Model:new(attributes)
             end
         end
     })
-    instance._attributes = attributes or {}
+    instance._attributes = attributes
     instance._original = {}
     instance._exists = false
     instance._relations_loaded = {}
@@ -163,8 +183,8 @@ function Model:create(attributes)
     
     -- Timestamps
     if self._timestamps then
-        instance._attributes.created_at = os.date("%Y-%m-%d %H:%M:%S")
-        instance._attributes.updated_at = os.date("%Y-%m-%d %H:%M:%S")
+        instance._attributes.created_at = os.date("!%Y-%m-%d %H:%M:%S")
+        instance._attributes.updated_at = os.date("!%Y-%m-%d %H:%M:%S")
     end
     
     -- Filtra fillable/guarded
@@ -232,7 +252,7 @@ function Model:delete()
     
     -- Soft delete
     if self._soft_deletes then
-        self._attributes.deleted_at = os.date("%Y-%m-%d %H:%M:%S")
+        self._attributes.deleted_at = os.date("!%Y-%m-%d %H:%M:%S")
         return self:_performUpdate()
     end
     
@@ -264,11 +284,18 @@ function Model:get(key)
     -- Verifica se é uma relação
     if self._relations[key] then
         if not self._relations_loaded[key] then
-            self._relations_loaded[key] = self._relations[key](self)
+            -- Captura os dois retornos (resultado, erro) — hasMany/hasOne/
+            -- belongsTo podem propagar erro de DB. Não cacheia em caso de
+            -- erro, pra próxima chamada poder tentar de novo.
+            local result, err = self._relations[key](self)
+            if err then
+                return nil, err
+            end
+            self._relations_loaded[key] = result
         end
         return self._relations_loaded[key]
     end
-    
+
     return self._attributes[key]
 end
 
@@ -300,96 +327,113 @@ end
 -- ==========================
 
 function Model:_performInsert()
+    -- Validações — antes só Model:create() validava; Model:save() num
+    -- registro novo pulava validate() inteiramente e inseria qualquer
+    -- coisa no banco (campo required vazio, email inválido, etc.)
+    local valid, errors = self:validate()
+    if not valid then
+        return false, errors
+    end
+
     -- Before create hook
     if self._before_create then
         self._before_create(self)
     end
-    
+
     -- Before save hook
     if self._before_save then
         self._before_save(self)
     end
-    
+
     -- Timestamps
     if self._timestamps then
-        self._attributes.created_at = os.date("%Y-%m-%d %H:%M:%S")
-        self._attributes.updated_at = os.date("%Y-%m-%d %H:%M:%S")
+        self._attributes.created_at = os.date("!%Y-%m-%d %H:%M:%S")
+        self._attributes.updated_at = os.date("!%Y-%m-%d %H:%M:%S")
     end
-    
+
     local data = self:_filterFillable(self._attributes)
-    local id = self:query():insert(data)
-    
+    local id, err = self:query():insert(data)
+
     if id then
         self._attributes[self._primary_key] = id
         self._exists = true
         self._original = self:_copyTable(self._attributes)
-        
+
         -- After create hook
         if self._after_create then
             self._after_create(self)
         end
-        
+
         -- After save hook
         if self._after_save then
             self._after_save(self)
         end
-        
+
         return true
     end
-    
-    return false
+
+    return false, err or "Failed to insert record"
 end
 
 function Model:_performUpdate()
+    -- Validações — mesma lacuna do _performInsert: Model:update()/save()
+    -- num registro existente pulavam validate() inteiramente.
+    local valid, errors = self:validate()
+    if not valid then
+        return false, errors
+    end
+
     -- Before update hook
     if self._before_update then
         self._before_update(self)
     end
-    
+
     -- Before save hook
     if self._before_save then
         self._before_save(self)
     end
-    
+
     -- Timestamps
     if self._timestamps then
-        self._attributes.updated_at = os.date("%Y-%m-%d %H:%M:%S")
+        self._attributes.updated_at = os.date("!%Y-%m-%d %H:%M:%S")
     end
-    
+
     local id = self._attributes[self._primary_key]
     local data = self:_filterFillable(self._attributes)
-    
+
     -- Remove primary key do update
     data[self._primary_key] = nil
-    
-    local result = self:query()
+
+    local result, err = self:query()
         :where(self._primary_key, id)
         :update(data)
-    
+
     if result then
         self._original = self:_copyTable(self._attributes)
-        
+
         -- After update hook
         if self._after_update then
             self._after_update(self)
         end
-        
+
         -- After save hook
         if self._after_save then
             self._after_save(self)
         end
-        
+
         return true
     end
-    
-    return false
+
+    return false, err or "Failed to update record"
 end
 
 function Model:_filterFillable(data)
+    local result = data
+
     -- Se tem guarded, remove esses campos
     if #self._guarded > 0 then
         local filtered = {}
-        for k, v in pairs(data) do
+        for k, v in pairs(result) do
             local is_guarded = false
             for _, guarded in ipairs(self._guarded) do
                 if k == guarded then
@@ -401,22 +445,23 @@ function Model:_filterFillable(data)
                 filtered[k] = v
             end
         end
-        return filtered
+        result = filtered
     end
-    
-    -- Se tem fillable, só aceita esses campos
+
+    -- Se tem fillable, só aceita esses campos. Antes, configurar guarded E
+    -- fillable ao mesmo tempo fazia fillable ser silenciosamente ignorado
+    -- (só o branch de guarded rodava); agora os dois se combinam.
     if #self._fillable > 0 then
         local filtered = {}
         for _, field in ipairs(self._fillable) do
-            if data[field] ~= nil then
-                filtered[field] = data[field]
+            if result[field] ~= nil then
+                filtered[field] = result[field]
             end
         end
-        return filtered
+        result = filtered
     end
-    
-    -- Senão, retorna tudo
-    return data
+
+    return result
 end
 
 function Model:_hydrate(results)

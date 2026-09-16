@@ -39,7 +39,7 @@ return {
     -- Database (usa .env para dados sensíveis)
     database = {
         host = env.get("DB_HOST", "localhost"),
-        port = tonumber(env.get("DB_PORT", "5432")),
+        port = tonumber(env.get("DB_PORT", "3306")), -- 3306 = MySQL (o framework é MySQL-only; 5432 seria Postgres)
         name = env.get("DB_NAME", "dev_db"),
         user = env.get("DB_USER", "dev_user"),
         password = env.get("DB_PASSWORD", "dev_pass")

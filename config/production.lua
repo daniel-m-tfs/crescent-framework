@@ -4,7 +4,7 @@
 
 local env = require("crescent.utils.env")
 
-return {
+local config = {
     -- Servidor
     server = {
         host = env.get("APP_HOST", "127.0.0.1"), -- Localhost quando atrás de Nginx/Apache
@@ -62,4 +62,30 @@ return {
         key = env.get("API_KEY")
     }
 }
+
+-- Fail-fast: antes, faltar JWT_SECRET/credenciais de banco em produção não
+-- era detectado no boot — o comentário "ERRO se não definido" ao lado de
+-- jwt.secret era só aspiracional, nada validava de fato. A app subia
+-- normalmente e só quebrava depois, no primeiro request que usasse auth
+-- (erro dentro de auth.lua) ou banco (erro cru dentro de mysql.lua).
+-- Melhor falhar alto e claro aqui, no carregamento da config, do que numa
+-- request de produção real.
+local missing = {}
+if not config.jwt.secret or config.jwt.secret == "" then
+    table.insert(missing, "JWT_SECRET")
+end
+if not config.database.name or config.database.name == "" then
+    table.insert(missing, "DB_NAME")
+end
+if not config.database.user or config.database.user == "" then
+    table.insert(missing, "DB_USER")
+end
+
+if #missing > 0 then
+    error("Configuração de produção incompleta — variáveis de ambiente faltando: " ..
+          table.concat(missing, ", ") ..
+          ". Defina no .env antes de subir em produção (ver INSTALLATION.md).")
+end
+
+return config
 

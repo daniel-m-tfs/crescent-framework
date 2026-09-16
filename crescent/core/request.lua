@@ -14,38 +14,54 @@ function M.read_body(req, max_size, callback)
     max_size = max_size or MAX_BODY_SIZE
     local chunks = {}
     local total_size = 0
-    
+
+    -- Garante no máximo UMA chamada de callback. Sem isso, exceder max_size
+    -- chama callback(...) e req:destroy(), mas nada impedia o evento "end"
+    -- (ou "error") de disparar depois e chamar callback(...) de novo com
+    -- argumentos diferentes — handler rodando duas vezes, res:finish()
+    -- chamado duas vezes, etc.
+    local settled = false
+    local function settle(...)
+        if settled then return end
+        settled = true
+        return callback(...)
+    end
+
     req:on("data", function(chunk)
+        if settled then return end
+
         total_size = total_size + #chunk
-        
+
         -- Proteção contra DoS: limita tamanho do body
         if total_size > max_size then
             req:destroy()
-            return callback(nil, nil, "body too large")
+            return settle(nil, nil, "body too large")
         end
-        
+
         chunks[#chunks + 1] = chunk
     end)
-    
+
     req:on("end", function()
+        if settled then return end
+
         local raw = table.concat(chunks)
         local ct = (req.headers["content-type"] or ""):lower()
-        
+
         -- Parse JSON se aplicável
         if ct:find("application/json", 1, true) and raw ~= "" then
             local ok, data = pcall(json.parse, raw)
             if ok then
-                callback(raw, data)
+                settle(raw, data)
             else
-                callback(raw, nil, "invalid json")
+                settle(raw, nil, "invalid json")
             end
         else
-            callback(raw, nil)
+            settle(raw, nil)
         end
     end)
-    
+
     req:on("error", function(err)
-        callback(nil, nil, "request error: " .. tostring(err))
+        settle(nil, nil, "request error: " .. tostring(err))
     end)
 end
 

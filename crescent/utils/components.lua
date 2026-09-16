@@ -14,8 +14,12 @@ local component_cache = {}
 -- @param data: Tabela com dados a passar para o componente
 -- @return: HTML renderizado ou nil em caso de erro
 function M.render(component_path, data)
+    if not path.is_safe(component_path) then
+        return nil, "Invalid component path: " .. tostring(component_path)
+    end
+
     local file_path = "views/" .. component_path .. ".etlua"
-    
+
     -- Tenta encontrar o arquivo
     local file = io.open(file_path, "r")
     if not file then

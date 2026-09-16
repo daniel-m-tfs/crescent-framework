@@ -22,37 +22,59 @@ function M.new()
     }
 end
 
+-- Compara duas rotas por especificidade: menos parâmetros dinâmicos vence
+-- (rota mais literal). Em empate, preserva a ordem de registro original via
+-- `order` (table.sort não é estável, então o desempate por índice original
+-- é o que garante isso). Isso resolve a colisão onde `/users/{id}` (o
+-- último segmento de qualquer rota é compilado como opcional em path.lua,
+-- então `/users/{id}` também casa `/users` e `/users/qualquer-coisa`)
+-- engolia silenciosamente rotas literais registradas depois dela, como
+-- `/users/search`, só porque vinha primeiro na ordem de registro.
+local function route_specificity_less(a, b)
+    if #a.names ~= #b.names then
+        return #a.names < #b.names
+    end
+    return a._order < b._order
+end
+
 -- Adiciona uma rota
 function M.add_route(router, method, path, handler)
     if type(handler) ~= "function" then
         error("Handler must be a function")
     end
-    
+
     -- Valida path
     if not path_utils.is_safe(path) then
         error("Unsafe path: " .. tostring(path))
     end
-    
+
     -- Calcula prefixo atual
     local prefix = M.get_current_prefix(router)
     local fullPath = path_utils.join(prefix, path)
     fullPath = path_utils.normalize(fullPath)
-    
+
     -- Compila path
     local pattern, names = path_utils.compile(fullPath)
-    
-    table.insert(router.routes[method], {
+
+    local list = router.routes[method]
+    table.insert(list, {
         pattern = pattern,
         names = names,
         handler = handler,
-        path = fullPath
+        path = fullPath,
+        _order = #list + 1
     })
+
+    -- Reordena por especificidade (ver route_specificity_less). Feito no
+    -- registro, não a cada request, então match_route continua O(n) sem
+    -- custo de sort por requisição.
+    table.sort(list, route_specificity_less)
 end
 
 -- Busca rota correspondente
 function M.match_route(router, method, path)
     local list = router.routes[method] or {}
-    
+
     for _, route in ipairs(list) do
         local caps = {path:match(route.pattern)}
         if #caps > 0 then
@@ -67,7 +89,7 @@ function M.match_route(router, method, path)
             return route.handler, params, route.path
         end
     end
-    
+
     return nil
 end
 

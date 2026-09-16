@@ -7,6 +7,26 @@ local sql_escape = require("crescent.database.sql_escape")
 local MySQL = {}
 MySQL.__index = MySQL
 
+-- Substitui os placeholders "?" de `sql` pelos valores de `params`, já
+-- escapados. Faz isso numa ÚNICA passada de gsub usando uma FUNÇÃO como
+-- replacement (não uma string) — isso é essencial por dois motivos:
+-- 1. Se o replacement fosse uma string, "%" dentro dela é metacaractere de
+--    captura do gsub ("%1".."%9"/"%%") e corrompe valores contendo "%"
+--    (ex: "50% off").
+-- 2. Substituir "?" um de cada vez, sequencialmente, confunde um "?" que
+--    sobrou DENTRO de um valor já substituído com o placeholder seguinte.
+-- Uma única passada com função-replacement resolve os dois problemas.
+local function bind_params(sql, params)
+    if not params or #params == 0 then
+        return sql
+    end
+    local i = 0
+    return (sql:gsub("%?", function()
+        i = i + 1
+        return sql_escape.escape_value(params[i])
+    end))
+end
+
 -- Pool de conexões (simples)
 local connection_pool = {}
 local pool_size = 0
@@ -37,12 +57,31 @@ else
     print("   Execute: luarocks install luasql-mysql")
 end
 
+-- Valida que a configuração mínima necessária pra conectar está presente,
+-- pra falhar com uma mensagem clara em vez de deixar o driver C estourar
+-- "bad argument #1 to 'connect' (string expected, got nil)".
+local function validate_config()
+    local missing = {}
+    if not config.database or config.database == "" then table.insert(missing, "DB_NAME") end
+    if not config.user or config.user == "" then table.insert(missing, "DB_USER") end
+    if not config.host or config.host == "" then table.insert(missing, "DB_HOST") end
+    if #missing > 0 then
+        return false, "Configuração de banco incompleta, faltando: " .. table.concat(missing, ", ")
+    end
+    return true
+end
+
 -- Cria nova conexão
 function MySQL.connect()
     if not driver_available then
         return nil, "Driver MySQL não instalado. Execute: luarocks install luasql-mysql"
     end
-    
+
+    local config_ok, config_err = validate_config()
+    if not config_ok then
+        return nil, config_err
+    end
+
     if driver == "luasql" then
         local env_obj = luasql.mysql()
         local conn, err = env_obj:connect(
@@ -77,8 +116,12 @@ function MySQL.getConnection()
         local conn = table.remove(connection_pool)
         pool_size = pool_size - 1
 
-        local alive = pcall(function() return conn:execute("SELECT 1") end)
-        if alive then
+        -- luasql normalmente RETORNA nil,err numa conexão morta em vez de
+        -- lançar erro Lua — pcall sozinho não detecta isso, precisa checar
+        -- o retorno também.
+        local ok, cursor = pcall(function() return conn:execute("SELECT 1") end)
+        if ok and cursor then
+            if type(cursor) ~= "boolean" then pcall(function() cursor:close() end) end
             return conn
         end
 
@@ -161,12 +204,7 @@ function MySQL:execute(sql, params)
     end
     
     -- Escapa parâmetros (fonte única: crescent.database.sql_escape)
-    local escaped_sql = sql
-    if params and #params > 0 then
-        for i, param in ipairs(params) do
-            escaped_sql = escaped_sql:gsub("?", sql_escape.escape_value(param), 1)
-        end
-    end
+    local escaped_sql = bind_params(sql, params)
 
     return self:query(escaped_sql)
 end
@@ -199,12 +237,7 @@ function MySQL:insert(sql, params)
     end
     
     -- Escapa parâmetros (fonte única: crescent.database.sql_escape)
-    local escaped_sql = sql
-    if params and #params > 0 then
-        for i, param in ipairs(params) do
-            escaped_sql = escaped_sql:gsub("?", sql_escape.escape_value(param), 1)
-        end
-    end
+    local escaped_sql = bind_params(sql, params)
 
     -- Executa INSERT
     local cursor, err = conn:execute(escaped_sql)
@@ -239,6 +272,64 @@ end
 -- DELETE
 function MySQL:delete(sql, params)
     return self:execute(sql, params)
+end
+
+-- Executa várias statements ({sql=, params=}) NA MESMA conexão, dentro de
+-- uma transação: ou todas persistem, ou nenhuma (ROLLBACK no primeiro
+-- erro). MySQL:query()/execute()/insert() normais pegam uma conexão do
+-- pool POR CHAMADA e a devolvem em seguida — não dá pra usá-los pra
+-- compor operações atômicas entre si; esta função existe exatamente pra
+-- isso (ex: migrate.lua precisa que "rodar o SQL da migration" e
+-- "registrar a migration como executada" aconteçam como uma coisa só).
+function MySQL.transaction(statements)
+    if not driver_available then
+        return nil, "Driver MySQL não instalado. Execute: luarocks install luasql-mysql"
+    end
+
+    local config_ok, config_err = validate_config()
+    if not config_ok then
+        return nil, config_err
+    end
+
+    local conn, env_obj = MySQL.connect()
+    if not conn then
+        return nil, env_obj
+    end
+
+    local began = conn:execute("START TRANSACTION")
+    if not began then
+        pcall(function() conn:close() end)
+        return nil, "Falha ao iniciar transação"
+    end
+
+    local results = {}
+    for i, stmt in ipairs(statements) do
+        local sql = bind_params(stmt.sql, stmt.params)
+        local cursor, err = conn:execute(sql)
+
+        if not cursor then
+            pcall(function() conn:execute("ROLLBACK") end)
+            pcall(function() conn:close() end)
+            return nil, string.format("Erro na statement %d: %s", i, err or "desconhecido")
+        end
+
+        if type(cursor) == "userdata" then
+            cursor:close()
+            table.insert(results, true)
+        else
+            table.insert(results, cursor) -- affected rows (INSERT/UPDATE/DELETE)
+        end
+    end
+
+    local committed = conn:execute("COMMIT")
+    if not committed then
+        pcall(function() conn:execute("ROLLBACK") end)
+        pcall(function() conn:close() end)
+        return nil, "Falha ao commitar transação"
+    end
+
+    MySQL.releaseConnection(conn)
+    return results
 end
 
 -- Testa conexão

@@ -8,6 +8,7 @@ local cors = require("crescent.middleware.cors")
 local security = require("crescent.middleware.security")
 local auth = require("crescent.middleware.auth")
 local logger = require("crescent.middleware.logger")
+local static = require("crescent.middleware.static")
 
 -- Core
 local response = require("crescent.core.response")
@@ -20,18 +21,19 @@ local headers_utils = require("crescent.utils.headers")
 
 -- API pública do framework
 local Crescent = {
-    -- Versão do framework
-    VERSION = "1.0.0",
-    
+    -- Versão do framework (mantida em sincronia com package.lua)
+    VERSION = "1.0.2",
+
     -- Cria nova aplicação
     new = Server.new,
-    
+
     -- Middlewares
     middleware = {
         cors = cors,
         security = security,
         auth = auth,
-        logger = logger
+        logger = logger,
+        static = static
     },
     
     -- Core utilities
