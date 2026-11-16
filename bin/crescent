@@ -18,4 +18,4 @@ export CRESCENT_CWD="$PWD"
 export CRESCENT_HOME="$root"
 
 cd "$root"
-exec "$resty" -I "$root/lua_modules/share/lua/5.1" --shdict 'crescent_limits 1m' --shdict 'crescent_jwt 1m' "$root/cli.lua" "$@"
+exec "$resty" -I "$root/lua_modules/share/lua/5.1" --shdict 'crescent_limits 1m' --shdict 'crescent_jwt 1m' --shdict 'crescent_sessions 1m' "$root/cli.lua" "$@"

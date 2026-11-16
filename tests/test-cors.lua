@@ -145,6 +145,25 @@ local suite = {
         tests.assertEquals(request(app, "GET", { origin = ORIGIN }).headers.Vary, "Accept-Encoding, Origin")
     end,
 
+    vary_merges_case_insensitively_and_lists = function()
+        local app = Crescent.new({ logger = function() end })
+        app:use(function(ctx, next) ctx.res:append_header("vary", "Accept-Encoding") return next() end)
+        app:use(function(ctx, next) ctx.res:append_header("Vary", "Cookie") return next() end)
+        app:use(cors.create({ origins = { ORIGIN } }))
+        app:get("/items", function(ctx) return ctx:text(200, "x") end)
+        local writer = request(app, "GET", { origin = ORIGIN })
+        tests.assertEquals(writer.headers.Vary, "Accept-Encoding, Cookie, Origin")
+        tests.assertNil(writer.headers.vary)
+
+        local dedup = Crescent.new({ logger = function() end })
+        dedup:use(function(ctx, next) ctx:header("vary", "origin") return next() end)
+        dedup:use(cors.create({ origins = { ORIGIN } }))
+        dedup:get("/items", function(ctx) return ctx:text(200, "x") end)
+        local deduped = request(dedup, "GET", { origin = ORIGIN })
+        tests.assertEquals(deduped.headers.vary, "origin", "an existing value is not repeated")
+        tests.assertNil(deduped.headers.Vary)
+    end,
+
     rejects_unsafe_configuration = function()
         tests.assertError(function() cors.create({ origins = { "https://a\r\nX: y" } }) end, "invalid CORS origin")
         tests.assertError(function() cors.create({ origins = { "*" } }) end)

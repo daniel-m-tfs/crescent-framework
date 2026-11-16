@@ -1,5 +1,6 @@
 local Response = require("crescent.response")
 local Validation = require("crescent.validation")
+local Cookie = require("crescent.cookie")
 
 local Context = {}
 Context.__index = Context
@@ -20,6 +21,7 @@ function Context.new(request, writer)
         state = {},
         body = request.body,
         raw_body = request.raw_body,
+        files = request.files or {},
     }, Context)
 end
 
@@ -62,11 +64,23 @@ function Context:redirect(location, code, options)
     return self.res:redirect(location, code, options)
 end
 
+-- Per-request helpers available in every template rendered with ctx:view.
+-- csrf_field() returns HTML: print it raw with <%- csrf_field() %>.
+local function view_data(ctx, data)
+    local merged = {}
+    if ctx.session then
+        merged.csrf_token = function() return ctx:csrf_token() end
+        merged.csrf_field = function() return require("crescent.middleware.csrf").field(ctx) end
+    end
+    for key, value in pairs(data or {}) do merged[key] = value end
+    return merged
+end
+
 function Context:view(name, data, code)
     if not self.view_renderer then
         return self:error(500, "view renderer is not configured", nil, "view_renderer_unavailable")
     end
-    local rendered, render_error = self.view_renderer:render(name, data or {})
+    local rendered, render_error = self.view_renderer:render(name, view_data(self, data))
     if not rendered then
         return self:error(500, "template rendering failed", self.debug and render_error or nil, "template_error")
     end
@@ -82,6 +96,73 @@ function Context:validate(schema, source)
     local valid, errors = Validation.validate(data or {}, schema)
     self.validation_errors = errors
     return valid, errors
+end
+
+-- Cookies -----------------------------------------------------------------
+
+function Context:cookies()
+    if not self._cookies then self._cookies = Cookie.parse(self.headers.cookie) end
+    return self._cookies
+end
+
+function Context:cookie(name)
+    return self:cookies()[name]
+end
+
+function Context:_secrets()
+    if not self._cookie_secrets then self._cookie_secrets = Cookie.secrets(self.config) end
+    return self._cookie_secrets
+end
+
+-- Returns the value of a cookie written with { signed = true }, or nil when
+-- it is missing or its signature does not match any configured secret.
+function Context:signed_cookie(name)
+    local raw = self:cookie(name)
+    if raw == nil then return nil end
+    return Cookie.unsign(name, raw, self:_secrets())
+end
+
+-- Setting the same cookie twice in a request keeps only the last value.
+function Context:set_cookie(name, value, options)
+    local settings = {}
+    for key, option in pairs(options or {}) do settings[key] = option end
+    if settings.secure == nil then settings.secure = not self.debug end
+    if type(value) == "number" then value = tostring(value) end
+    if settings.signed and type(value) == "string" then
+        value = Cookie.sign(name, value, self:_secrets()[1])
+    end
+    local header = Cookie.serialize(name, value, settings)
+    local current = self.res:get_header("Set-Cookie")
+    if type(current) ~= "table" then current = { current } end
+    local kept = {}
+    local prefix = name .. "="
+    for _, item in ipairs(current) do
+        if item:sub(1, #prefix) ~= prefix then kept[#kept + 1] = item end
+    end
+    kept[#kept + 1] = header
+    self.res:header("Set-Cookie", #kept == 1 and kept[1] or kept)
+    return self
+end
+
+-- `options` must carry the same path/domain the cookie was set with.
+function Context:clear_cookie(name, options)
+    local settings = {}
+    for key, option in pairs(options or {}) do settings[key] = option end
+    settings.signed = nil
+    settings.max_age = 0
+    settings.expires = 0
+    return self:set_cookie(name, "", settings)
+end
+
+-- CSRF and uploads --------------------------------------------------------
+
+function Context:csrf_token()
+    return require("crescent.middleware.csrf").token(self)
+end
+
+-- Moves an uploaded file out of the temporary directory. See crescent.upload.
+function Context:save_upload(file, destination, options)
+    return require("crescent.upload").save(file, destination, self.config, options)
 end
 
 return Context

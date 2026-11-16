@@ -11,6 +11,13 @@ Módulos:
 | `crescent.middleware.cors` | CORS com allowlist e preflight |
 | `crescent.middleware.security_headers` | headers de segurança |
 | `crescent.middleware.rate_limit` | rate limit entre workers (`ngx.shared`) |
+| `crescent.middleware.session` | sessões (cookie AES-256-GCM ou `ngx.shared`) — ver [web.md](web.md#sessões) |
+| `crescent.middleware.csrf` | proteção CSRF com token na sessão — ver [web.md](web.md#csrf) |
+
+> Aplicações com formulários e login por cookie: use sessões + CSRF
+> ([docs/web.md](web.md)), chame `ctx.session:regenerate()` após o login e
+> mantenha `secret_key`/`APP_KEY` fora do repositório. Cookies assinados,
+> uploads e o limite de 4 KB do cookie de sessão também estão descritos lá.
 
 Middleware segue a convenção do framework: `function(ctx, next) ... return next() end`.
 Para bloquear, o middleware responde (`return ctx:error(...)`) sem chamar `next`.

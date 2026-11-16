@@ -26,14 +26,80 @@ function Response:status(code)
     return self
 end
 
-function Response:header(name, value)
+local function check_header(name, value, level)
     if type(name) ~= "string" or not name:match("^[%w!#$%%&'*+%-.^_`|~]+$") then
-        error("invalid response header name: " .. tostring(name), 2)
+        error("invalid response header name: " .. tostring(name), level + 1)
     end
     if value ~= nil and not is_safe_header_value(value) then
-        error("invalid response header value for " .. name, 2)
+        error("invalid response header value for " .. name, level + 1)
     end
-    self.writer.headers[name] = value
+end
+
+-- Header names are case-insensitive: returns the key already used in the
+-- writer for `name`, if any.
+local function existing_key(headers, name)
+    if headers[name] ~= nil then return name end
+    local lower = name:lower()
+    for key in pairs(headers) do
+        if type(key) == "string" and key:lower() == lower then return key end
+    end
+    return nil
+end
+
+-- Sets (or with nil, removes) a header, replacing any value stored under a
+-- differently-cased name.
+function Response:header(name, value)
+    check_header(name, value, 2)
+    local headers = self.writer.headers
+    local key = existing_key(headers, name)
+    if key and key ~= name then headers[key] = nil end
+    headers[name] = value
+    return self
+end
+
+-- Adds a value without replacing the existing ones; repeated headers (e.g.
+-- several Set-Cookie) become a list, which nginx sends as separate lines.
+function Response:append_header(name, value)
+    if value == nil then error("append_header requires a value for " .. tostring(name), 2) end
+    check_header(name, value, 2)
+    local headers = self.writer.headers
+    local key = existing_key(headers, name) or name
+    local current = headers[key]
+    local list = {}
+    if type(current) == "table" then
+        for _, item in ipairs(current) do list[#list + 1] = item end
+    elseif current ~= nil then
+        list[1] = current
+    end
+    if type(value) == "table" then
+        for _, item in ipairs(value) do list[#list + 1] = item end
+    else
+        list[#list + 1] = value
+    end
+    headers[key] = #list == 1 and list[1] or list
+    return self
+end
+
+-- Returns the value (string, number or list) of a header, case-insensitively.
+function Response:get_header(name)
+    if type(name) ~= "string" then return nil end
+    local headers = self.writer.headers
+    local key = existing_key(headers, name)
+    return key and headers[key] or nil
+end
+
+-- Registers `fn(response)` to run once, right before the response is
+-- flushed. Hooks may still change headers (the session middleware writes its
+-- Set-Cookie here); an error in a hook aborts the send, so the application
+-- answers 500 instead.
+function Response:before_flush(fn)
+    assert(type(fn) == "function", "before_flush expects a function")
+    local hooks = self.writer.before_flush
+    if not hooks then
+        hooks = {}
+        self.writer.before_flush = hooks
+    end
+    hooks[#hooks + 1] = fn
     return self
 end
 
@@ -59,9 +125,14 @@ end
 function Response:send(body)
     local writer = self.writer
     if writer.sent then return self end
-    writer.sent = true
     writer.status = writer.status or 200
     writer.body = body or ""
+    local hooks = writer.before_flush
+    if hooks then
+        writer.before_flush = nil
+        for _, hook in ipairs(hooks) do hook(self) end
+    end
+    writer.sent = true
     if writer.flush then writer.flush(writer) end
     return self
 end

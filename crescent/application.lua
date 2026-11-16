@@ -179,7 +179,8 @@ function Application:handle(request, writer)
     ctx.res:header("X-Request-Id", ctx.request_id)
     if request.body_error then
         local details = self.config.debug and request.body_error or nil
-        return ctx:error(400, "malformed request body", details, request.body_error_code or "malformed_body")
+        return ctx:error(request.body_error_status or 400, request.body_error_message or "malformed request body",
+            details, request.body_error_code or "malformed_body")
     end
     local middleware = self.middleware
     local function dispatch(index)
@@ -218,8 +219,11 @@ end
 function Application:run(ngx_api)
     ngx_api = ngx_api or ngx
     if not ngx_api then error("Application:run() requires OpenResty ngx") end
-    local request = Request.from_ngx(ngx_api)
-    return self:handle(request, ngx_writer(ngx_api))
+    local request = Request.from_ngx(ngx_api, self.config)
+    local ok, result = pcall(self.handle, self, request, ngx_writer(ngx_api))
+    Request.cleanup(request)
+    if not ok then error(result, 0) end
+    return result
 end
 
 return Application
