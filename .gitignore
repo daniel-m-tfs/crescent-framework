@@ -1,0 +1,11 @@
+*.log
+logs/*.pid
+.env
+.env.*
+!.env.example
+reports/
+luarocks/
+lua_modules/
+.DS_Store
+.vscode/
+*_temp/
