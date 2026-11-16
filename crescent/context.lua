@@ -76,15 +76,26 @@ local function view_data(ctx, data)
     return merged
 end
 
-function Context:view(name, data, code)
+-- ctx:view(name, data[, status | { status =, layout = }]). With a layout,
+-- the page is rendered first and handed to the layout as `content` (print it
+-- with <%- content %>); the layout sees the same data. `config.view_layout`
+-- sets a default layout; pass `layout = false` to render without it.
+function Context:view(name, data, options)
+    if type(options) ~= "table" then options = { status = options } end
     if not self.view_renderer then
         return self:error(500, "view renderer is not configured", nil, "view_renderer_unavailable")
     end
-    local rendered, render_error = self.view_renderer:render(name, view_data(self, data))
+    local merged = view_data(self, data)
+    local rendered, render_error = self.view_renderer:render(name, merged)
+    local layout = options.layout
+    if layout == nil then layout = self.config and self.config.view_layout end
+    if rendered and layout then
+        rendered, render_error = self.view_renderer:render_layout(layout, rendered, merged)
+    end
     if not rendered then
         return self:error(500, "template rendering failed", self.debug and render_error or nil, "template_error")
     end
-    return self:html(code or 200, rendered)
+    return self:html(options.status or 200, rendered)
 end
 
 function Context:error(code, message, details, identifier)

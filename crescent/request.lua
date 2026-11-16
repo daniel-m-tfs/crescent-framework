@@ -105,12 +105,7 @@ function Request.from_ngx(ngx_api, config)
         request.body_error_code = "body_unreadable"
         return request
     end
-    -- Deletes temporary upload files the action did not keep.
-function Request.cleanup(request)
-    if request and request.files then Upload.cleanup(request.files) end
-end
-
-return Request.decode_body(request, body)
+    return Request.decode_body(request, body)
 end
 
 -- Deletes temporary upload files the action did not keep.

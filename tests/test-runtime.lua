@@ -192,6 +192,29 @@ local function client_errors_become_4xx()
     tests.assertEquals(#logged, 0, "client errors are not logged as failures")
 end
 
+local function views_with_layout()
+    local app = silent_app({ root = ".", views_root = "tests/fixtures/views" })
+    app:get("/page", function(ctx)
+        return ctx:view("hello.etlua", { name = "Ada", trusted = "" }, { layout = "layout.etlua", status = 201 })
+    end)
+    app:get("/plain", function(ctx) return ctx:view("hello.etlua", { name = "Bob", trusted = "" }, 202) end)
+    local page = handle(app, { method = "GET", path = "/page" })
+    tests.assertEquals(page.status, 201)
+    tests.assertContains(page.body, "<main>Hello Ada")
+    tests.assertContains(page.body, "</main></body></html>")
+    local plain = handle(app, { method = "GET", path = "/plain" })
+    tests.assertEquals(plain.status, 202)
+    tests.assertNotContains(plain.body, "<main>")
+
+    local defaulted = silent_app({ root = ".", views_root = "tests/fixtures/views", view_layout = "layout.etlua" })
+    defaulted:get("/", function(ctx) return ctx:view("hello.etlua", { name = "Cy", trusted = "" }) end)
+    defaulted:get("/bare", function(ctx)
+        return ctx:view("hello.etlua", { name = "Di", trusted = "" }, { layout = false })
+    end)
+    tests.assertContains(handle(defaulted, { method = "GET", path = "/" }).body, "<main>Hello Cy")
+    tests.assertNotContains(handle(defaulted, { method = "GET", path = "/bare" }).body, "<main>")
+end
+
 local function env_precedence()
     local Env = require("crescent.env")
     local parsed = Env.parse('A=1\nexport B="two words"\n# comment\nC=3 # inline\nD=\'x # y\'\n')
@@ -216,4 +239,5 @@ assert(tests.runSuite("Runtime", {
     header_injection_is_rejected = header_injection_is_rejected,
     env_precedence = env_precedence,
     client_errors_become_4xx = client_errors_become_4xx,
+    views_with_layout = views_with_layout,
 }))
