@@ -61,4 +61,5 @@ A imagem (`docker build -t {{project}} .`) usa `conf/nginx.docker.conf`
 `bin/crescent db:migrate` no deploy. Toda variável lida pela aplicação
 precisa de uma diretiva `env NOME;` nos arquivos de `conf/`.
 
-A documentação do framework está em `crescent` → `docs/` no repositório do NEWCrescent.
+Documentação: <https://crescent.tyne.com.br> · código do framework:
+<https://github.com/daniel-m-tfs/crescent-framework>.

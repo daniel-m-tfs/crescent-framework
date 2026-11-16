@@ -4,7 +4,7 @@ local Module = {}
 
 -- GET /health (liveness) and GET /ready (checks the database when configured).
 function Module.register(app)
-    Health.register(app, { service = "newcrescent" })
+    Health.register(app, { service = "crescent" })
 end
 
 return Module

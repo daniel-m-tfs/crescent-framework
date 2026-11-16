@@ -1,6 +1,6 @@
-# NEWCrescent
+# Crescent Framework
 
-O Crescent reconstruído sobre **Lua + OpenResty**. O OpenResty/Nginx cuida do
+Framework web em **Lua sobre OpenResty** (Nginx + LuaJIT), com MySQL. O OpenResty/Nginx cuida do
 HTTP (TLS, workers, keep-alive, limites, arquivos estáticos); o framework cuida
 de rotas, actions, middleware, validação, erros, ORM/MySQL, templates, segurança
 e CLI.
@@ -71,10 +71,10 @@ use um usuário com acesso apenas ao banco de teste:
 
 ```bash
 DB_USER=... DB_PASSWORD=... DB_HOST=127.0.0.1 DB_PORT=3306 \
-DB_TEST_NAME=newcrescent_test lua cli.lua test mysql-integration
+DB_TEST_NAME=crescent_test lua cli.lua test mysql-integration
 ```
 
-## Migração a partir do Crescent (Luvit)
+## Migração a partir do Crescent 1.x (Luvit)
 
 - `ctx.json(...)` → `ctx:json(...)` (dois-pontos em todo o contexto).
 - Middleware: `return false` para interromper → retornar uma resposta sem `next()`.
@@ -82,3 +82,18 @@ DB_TEST_NAME=newcrescent_test lua cli.lua test mysql-integration
 - Hashes de senha do Crescent antigo (`iter$salt$hash`) continuam válidos.
 - `crescent.utils.http` → `crescent.http_client`; `crescent.utils.mail` → `crescent.mail`.
 - Arquivos estáticos: sirva pelo Nginx (`location /public/`), não por middleware.
+
+## Começando um projeto
+
+Use o template [crescent-starter](https://github.com/daniel-m-tfs/crescent-starter)
+(hello world + Docker) ou gere um projeto a partir deste repositório:
+
+```bash
+./bin/crescent new meu-projeto
+```
+
+Documentação completa: <https://crescent.tyne.com.br>.
+
+## Licença
+
+MIT — veja [LICENSE](LICENSE).

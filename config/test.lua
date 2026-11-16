@@ -11,7 +11,7 @@ return {
     database = {
         host = Env.get("DB_HOST", "127.0.0.1"),
         port = Env.number("DB_PORT", 3306),
-        database = Env.get("DB_TEST_NAME", "newcrescent_test"),
+        database = Env.get("DB_TEST_NAME", "crescent_test"),
         user = Env.get("DB_USER", "root"),
         password = Env.get("DB_PASSWORD", ""),
     },

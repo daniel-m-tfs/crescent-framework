@@ -2,7 +2,7 @@ package.path = "./?.lua;./?/init.lua;" .. package.path
 
 -- Runs against a real MySQL only when credentials are in the environment:
 --   DB_PASSWORD=... DB_USER=root DB_HOST=127.0.0.1 DB_PORT=3306 \
---   DB_TEST_NAME=newcrescent_test lua cli.lua test mysql-integration
+--   DB_TEST_NAME=crescent_test lua cli.lua test mysql-integration
 -- The database must exist; tables are created and dropped by the test.
 local password = os.getenv("DB_PASSWORD")
 if not password or password == "" then
@@ -18,7 +18,7 @@ local Model = require("crescent.model")
 local db = Database.configure({
     host = os.getenv("DB_HOST") or "127.0.0.1",
     port = tonumber(os.getenv("DB_PORT") or "3306"),
-    database = os.getenv("DB_TEST_NAME") or "newcrescent_test",
+    database = os.getenv("DB_TEST_NAME") or "crescent_test",
     user = os.getenv("DB_USER") or "root",
     password = password,
 })

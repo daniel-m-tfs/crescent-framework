@@ -43,7 +43,7 @@ local function lazy_table(modules)
 end
 
 local Crescent = lazy_table(lazy)
-Crescent.VERSION = "0.2.0"
+Crescent.VERSION = "2.0.0"
 Crescent.new = function(config) return Application.new(config) end
 for name, modules in pairs(groups) do Crescent[name] = lazy_table(modules) end
 

@@ -1,4 +1,4 @@
-# TODO - NEWCrescent
+# TODO - Crescent
 
 Roadmap para reconstruir o Crescent sobre Lua + OpenResty, inspirado no modelo do Lapis.
 
@@ -14,7 +14,7 @@ Roadmap para reconstruir o Crescent sobre Lua + OpenResty, inspirado no modelo d
 
 ## Estrategia de reaproveitamento do Crescent atual
 
-- [ ] Criar uma matriz de migracao com as colunas: modulo antigo, reutilizar, adaptar ou reescrever, dependencia de Luvit, testes existentes e destino no NEWCrescent.
+- [ ] Criar uma matriz de migracao com as colunas: modulo antigo, reutilizar, adaptar ou reescrever, dependencia de Luvit, testes existentes e destino no Crescent.
 - [x] Reaproveitar a organizacao `src/<modulo>/{controllers,services,models,routes}` e manter o fluxo `Module.register(app)`.
 - [x] Reaproveitar o estilo de controllers/actions: receber `ctx`, chamar service e retornar `ctx.json`, `ctx.text`, `ctx.view` ou `ctx.error`.
 - [x] Reaproveitar o estilo de models declarativos: `table`, `fillable`, `guarded`, `hidden`, `timestamps`, `validates`, `relations` e hooks.
@@ -47,7 +47,7 @@ Roadmap para reconstruir o Crescent sobre Lua + OpenResty, inspirado no modelo d
 - [ ] Configurar proxy confiavel, IP real, compressao, cache e logs de acesso.
 - [ ] Integrar health checks, graceful reload, systemd/container e observabilidade.
 
-## Responsabilidades do NEWCrescent
+## Responsabilidades do Crescent
 
 - [ ] Registrar e resolver rotas.
 - [ ] Executar actions e compor middleware da aplicacao.

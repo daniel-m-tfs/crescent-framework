@@ -1,6 +1,6 @@
 # Banco de dados
 
-A camada de dados do NEWCrescent roda sobre `lua-resty-mysql` (cosockets do
+A camada de dados do Crescent roda sobre `lua-resty-mysql` (cosockets do
 OpenResty). Por enquanto **somente MySQL/MariaDB** é suportado.
 
 Módulos:
@@ -292,5 +292,5 @@ O banco precisa existir; o teste cria e remove as tabelas `it_users`,
 
 ```sh
 DB_HOST=127.0.0.1 DB_PORT=3306 DB_USER=root DB_PASSWORD=segredo \
-DB_TEST_NAME=newcrescent_test lua cli.lua test mysql-integration
+DB_TEST_NAME=crescent_test lua cli.lua test mysql-integration
 ```
