@@ -9,3 +9,5 @@ lua_modules/
 .DS_Store
 .vscode/
 *_temp/
+tmp/*
+!tmp/.gitkeep

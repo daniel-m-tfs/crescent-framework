@@ -8,12 +8,14 @@ local function is_test_file(path)
         or name:match("^tests[^/]*%.lua$") ~= nil
 end
 
-local function find_test_files()
+local function find_test_files(filter)
     local files = {}
     local handle = io.popen("find tests test -type f -name '*.lua' 2>/dev/null")
     if not handle then return files end
     for path in handle:lines() do
-        if is_test_file(path) then files[#files + 1] = path end
+        if is_test_file(path) and (not filter or path:find(filter, 1, true)) then
+            files[#files + 1] = path
+        end
     end
     handle:close()
     table.sort(files)
@@ -24,8 +26,22 @@ local function shell_quote(value)
     return "'" .. tostring(value):gsub("'", "'\\''") .. "'"
 end
 
+-- Tests run on OpenResty's LuaJIT through the `resty` CLI, the same runtime
+-- that serves requests. Override the binary with RESTY_BIN.
+local function resty_bin()
+    local configured = os.getenv("RESTY_BIN")
+    if configured and configured ~= "" then return configured end
+    for _, candidate in ipairs({ "/opt/homebrew/opt/openresty/bin/resty", "/usr/local/openresty/bin/resty", "/opt/openresty/bin/resty" }) do
+        local file = io.open(candidate, "r")
+        if file then file:close() return candidate end
+    end
+    return "resty"
+end
+
 local function run_file(path)
-    local command = "lua " .. shell_quote(path) .. " 2>&1; printf '\n__CRESCENT_EXIT__:%s\n' $?"
+    local command = shell_quote(resty_bin())
+        .. " -I lua_modules/share/lua/5.1 --shdict 'crescent_limits 1m' "
+        .. shell_quote(path) .. " 2>&1; printf '\n__CRESCENT_EXIT__:%s\n' $?"
     local handle = io.popen(command)
     if not handle then return false, "unable to start lua" end
     local output = handle:read("*a") or ""
@@ -35,9 +51,9 @@ local function run_file(path)
     return exit_code == 0, output
 end
 
-function TestCommand.run()
+function TestCommand.run(filter)
     cli_output.print_header("Crescent tests")
-    local files = find_test_files()
+    local files = find_test_files(filter)
     if #files == 0 then
         cli_output.print_error("No test files found in tests/ or test/")
         return false

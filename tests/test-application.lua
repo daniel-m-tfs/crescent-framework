@@ -4,7 +4,6 @@ local tests = require("crescent.utils.tests")
 local Crescent = require("crescent")
 
 local function run_tests_with_ngx_body()
-    local previous_ngx = ngx
     local body_read = false
     local response_body
     local fake_ngx = {
@@ -18,12 +17,10 @@ local function run_tests_with_ngx_body()
                 return "payload"
             end,
         },
-        var = { uri = "/echo" },
+        var = { uri = "/echo", request_id = "0123abcd" },
         header = {},
-        say = function(value) response_body = value end,
+        print = function(value) response_body = value end,
     }
-
-    ngx = fake_ngx
     local app = Crescent.new({ debug = false })
     app:post("/echo", function(ctx)
         tests.assertEquals(ctx.body, "payload")
@@ -32,16 +29,14 @@ local function run_tests_with_ngx_body()
         return ctx:text(201, ctx.body)
     end)
 
-    local ok, err = pcall(app.run, app)
-    ngx = previous_ngx
+    local ok, err = pcall(app.run, app, fake_ngx)
     tests.assertTrue(ok, tostring(err))
     tests.assertEquals(fake_ngx.status, 201)
     tests.assertEquals(response_body, "payload")
-    tests.assertContains(fake_ngx.header["X-Request-Id"], "crescent-")
+    tests.assertEquals(fake_ngx.header["X-Request-Id"], "0123abcd")
 end
 
 local function run_tests_with_json_body()
-    local previous_ngx = ngx
     local response_body
     local fake_ngx = {
         req = {
@@ -53,18 +48,15 @@ local function run_tests_with_json_body()
         },
         var = { uri = "/json" },
         header = {},
-        say = function(value) response_body = value end,
+        print = function(value) response_body = value end,
     }
-
-    ngx = fake_ngx
     local app = Crescent.new({ debug = false })
     app:post("/json", function(ctx)
         tests.assertEquals(ctx.body.name, "Ada")
         tests.assertEquals(ctx.raw_body, '{"name":"Ada"}')
         return ctx:json(200, { received = ctx.body.name })
     end)
-    local ok, err = pcall(app.run, app)
-    ngx = previous_ngx
+    local ok, err = pcall(app.run, app, fake_ngx)
     tests.assertTrue(ok, tostring(err))
     tests.assertEquals(fake_ngx.status, 200)
     tests.assertContains(response_body, '"received":"Ada"')
@@ -80,16 +72,13 @@ local function run_tests_with_json_body()
     malformed_app:post("/json", function()
         action_called = true
     end)
-    ngx = malformed_ngx
-    local malformed_ok, malformed_err = pcall(malformed_app.run, malformed_app)
-    ngx = previous_ngx
+    local malformed_ok, malformed_err = pcall(malformed_app.run, malformed_app, malformed_ngx)
     tests.assertTrue(malformed_ok, tostring(malformed_err))
     tests.assertEquals(malformed_ngx.status, 400)
     tests.assertFalse(action_called)
 end
 
 local function run_tests_with_form_body()
-    local previous_ngx = ngx
     local response_body
     local fake_ngx = {
         req = {
@@ -101,18 +90,15 @@ local function run_tests_with_form_body()
         },
         var = { uri = "/form" },
         header = {},
-        say = function(value) response_body = value end,
+        print = function(value) response_body = value end,
     }
-
-    ngx = fake_ngx
     local app = Crescent.new({ debug = false })
     app:post("/form", function(ctx)
         tests.assertEquals(ctx.body.name, "Ada Lovelace")
         tests.assertTableEquals(ctx.body.tag, { "lua", "web/app" })
         return ctx:json(200, { name = ctx.body.name })
     end)
-    local ok, err = pcall(app.run, app)
-    ngx = previous_ngx
+    local ok, err = pcall(app.run, app, fake_ngx)
     tests.assertTrue(ok, tostring(err))
     tests.assertEquals(fake_ngx.status, 200)
     tests.assertContains(response_body, '"name":"Ada Lovelace"')
@@ -125,9 +111,7 @@ local function run_tests_with_form_body()
     malformed_ngx.header = {}
     local malformed_app = Crescent.new({ debug = false })
     malformed_app:post("/form", function() error("must not run") end)
-    ngx = malformed_ngx
-    local malformed_ok, malformed_err = pcall(malformed_app.run, malformed_app)
-    ngx = previous_ngx
+    local malformed_ok, malformed_err = pcall(malformed_app.run, malformed_app, malformed_ngx)
     tests.assertTrue(malformed_ok, tostring(malformed_err))
     tests.assertEquals(malformed_ngx.status, 400)
 end
@@ -189,7 +173,7 @@ local function application_tests()
     tests.assertEquals(valid_writer.status, 201, "valid input must execute the action")
     tests.assertTrue(action_called, "valid input must execute the action")
 
-    local view_app = Crescent.new({ debug = false, views_root = "tests/fixtures/views" })
+    local view_app = Crescent.new({ debug = false, root = ".", views_root = "tests/fixtures/views" })
     view_app:get("/page", function(ctx)
         return ctx:view("hello.etlua", { name = "Ada", trusted = "<b>ok</b>" })
     end)

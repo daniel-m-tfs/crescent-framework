@@ -13,7 +13,7 @@ base_url="http://127.0.0.1:8080"
 tmp_dir="$(mktemp -d)"
 trap '"$openresty_bin" -p "$PWD/" -c nginx.conf -s stop >/dev/null 2>&1 || true; rm -rf "$tmp_dir"' EXIT
 
-"$openresty_bin" -p "$PWD/" -c nginx.conf
+APP_ENV=test "$openresty_bin" -p "$PWD/" -c nginx.conf
 
 health_body="$tmp_dir/health.body"
 health_headers="$tmp_dir/health.headers"
@@ -22,6 +22,14 @@ health_status="$(curl -sS --retry 20 --retry-delay 0 --retry-connrefused \
 test "$health_status" = "200"
 grep -q '"status":"ok"' "$health_body"
 grep -qi '^X-Request-Id: ' "$health_headers"
+grep -q '"environment":"test"' "$health_body"
+test "$(tail -c 1 "$health_body" | od -An -c | tr -d ' ')" = "}"
+
+upstream_id="$(curl -sS -D - -o /dev/null -H 'X-Request-Id: trace-123' "$base_url/health" | tr -d '\r' | awk -F': ' 'tolower($1)=="x-request-id"{print $2}')"
+test "$upstream_id" = "trace-123"
+
+head_status="$(curl -sS -I -o /dev/null -w '%{http_code}' "$base_url/health")"
+test "$head_status" = "200"
 
 missing_status="$(curl -sS -o /dev/null -w '%{http_code}' "$base_url/missing")"
 test "$missing_status" = "404"

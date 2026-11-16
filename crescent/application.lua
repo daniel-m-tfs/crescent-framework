@@ -1,8 +1,8 @@
 local Router = require("crescent.router")
 local Context = require("crescent.context")
+local Request = require("crescent.request")
+local Response = require("crescent.response")
 local View = require("crescent.view")
-local json_ok, cjson = pcall(require, "cjson.safe")
-if not json_ok then cjson = nil end
 
 local Application = {}
 Application.__index = Application
@@ -22,36 +22,12 @@ local function make_request_id()
     return string.format("crescent-%x-%x-%x", math.floor(now * 1000), worker, request_counter)
 end
 
+-- An upstream X-Request-Id (from a trusted proxy) wins, then nginx's own
+-- $request_id, then a locally generated one.
 local function request_id(request)
+    if valid_request_id(request.upstream_request_id) then return request.upstream_request_id end
     if valid_request_id(request.request_id) then return request.request_id end
     return make_request_id()
-end
-
-local function decode_form_component(value)
-    value = value:gsub("+", " ")
-    if value:find("%%[^0-9a-fA-F]", 1) or value:find("%%.$") then return nil end
-    local decoded = value:gsub("%%([0-9a-fA-F][0-9a-fA-F])", function(hex)
-        return string.char(tonumber(hex, 16))
-    end)
-    return decoded:find("%%", 1, true) and nil or decoded
-end
-
-local function parse_form(body)
-    local result = {}
-    for pair in body:gmatch("[^&]+") do
-        local key, value = pair:match("^([^=]*)=(.*)$")
-        if key == nil then key, value = pair, "" end
-        key, value = decode_form_component(key), decode_form_component(value)
-        if not key or not value or key == "" then return nil, "malformed form body" end
-        if result[key] == nil then
-            result[key] = value
-        elseif type(result[key]) == "table" then
-            result[key][#result[key] + 1] = value
-        else
-            result[key] = { result[key], value }
-        end
-    end
-    return result
 end
 
 local function merge(left, right)
@@ -61,25 +37,51 @@ local function merge(left, right)
     return result
 end
 
+local function default_logger(level, message)
+    if ngx and ngx.log then
+        ngx.log(level == "error" and ngx.ERR or ngx.WARN, message)
+    else
+        io.stderr:write("[", level, "] ", message, "\n")
+    end
+end
+
+-- Relative paths are resolved against `config.root` when given, otherwise
+-- against the OpenResty prefix (`-p`) — not the process working directory,
+-- which differs between dev and production.
+local function resolve_path(path, root)
+    if path:sub(1, 1) == "/" then return path end
+    if root then return root:gsub("/$", "") .. "/" .. path end
+    local prefix = ngx and ngx.config and ngx.config.prefix and ngx.config.prefix()
+    if prefix and prefix ~= "" then
+        return prefix:gsub("/$", "") .. "/" .. path
+    end
+    return path
+end
+
 function Application.new(config)
     config = config or {}
     if config.error_handler ~= nil then
         assert(type(config.error_handler) == "function", "error_handler must be a function")
     end
+    local merged = merge({ debug = false, environment = "production" }, config)
     return setmetatable({
-        config = merge({ debug = false, environment = "production" }, config),
+        config = merged,
         router = Router.new(),
-        view_renderer = config.view_renderer or View.new(config.views_root or "views", { cache = not config.debug }),
+        view_renderer = config.view_renderer
+            or View.new(resolve_path(config.views_root or "views", config.root), { cache = not merged.debug }),
         error_handler = config.error_handler,
+        logger = config.logger or default_logger,
         middleware = {},
     }, Application)
 end
 
-function Application:get(path, action, name) return self.router:add("GET", path, action, name) and self end
-function Application:post(path, action, name) return self.router:add("POST", path, action, name) and self end
-function Application:put(path, action, name) return self.router:add("PUT", path, action, name) and self end
-function Application:patch(path, action, name) return self.router:add("PATCH", path, action, name) and self end
-function Application:delete(path, action, name) return self.router:add("DELETE", path, action, name) and self end
+function Application:get(path, action, name) self.router:add("GET", path, action, name) return self end
+function Application:post(path, action, name) self.router:add("POST", path, action, name) return self end
+function Application:put(path, action, name) self.router:add("PUT", path, action, name) return self end
+function Application:patch(path, action, name) self.router:add("PATCH", path, action, name) return self end
+function Application:delete(path, action, name) self.router:add("DELETE", path, action, name) return self end
+function Application:options(path, action, name) self.router:add("OPTIONS", path, action, name) return self end
+function Application:head(path, action, name) self.router:add("HEAD", path, action, name) return self end
 function Application:group(prefix, callback)
     self.router:group(prefix, function() callback(self) end)
     return self
@@ -101,88 +103,101 @@ function Application:validated(schema, action, source)
 end
 function Application:on_error(handler) self.error_handler = handler; return self end
 
+function Application:_dispatch_route(ctx)
+    local action, params, route = self.router:match(ctx.method, ctx.path)
+    -- HEAD falls back to GET; nginx strips the body for HEAD responses.
+    if not action and ctx.method == "HEAD" then
+        action, params, route = self.router:match("GET", ctx.path)
+    end
+    if not action then
+        local allowed = self.router:allowed_methods(ctx.path)
+        if #allowed > 0 then
+            ctx.res:header("Allow", table.concat(allowed, ", "))
+            return ctx:error(405, "method not allowed", nil, "method_not_allowed")
+        end
+        return ctx:error(404, "route not found", nil, "route_not_found")
+    end
+    ctx.params = params
+    ctx.route = route
+    return action(ctx)
+end
+
+-- Actions may return a table/string instead of writing a response; it is sent
+-- as 200 JSON/text. An action that neither responds nor returns a value is a
+-- bug and produces a 500 instead of an empty 200.
+function Application:_finalize(ctx, result)
+    if ctx.res:is_sent() then return result end
+    if getmetatable(result) == Response then result = nil end
+    if type(result) == "table" then return ctx:json(200, result) end
+    if type(result) == "string" then return ctx:text(200, result) end
+    self.logger("error", string.format("[%s] %s %s produced no response", ctx.request_id, ctx.method, ctx.path))
+    return ctx:error(500, "internal server error", nil, "empty_response")
+end
+
+function Application:_handle_error(ctx, err)
+    self.logger("error", string.format("[%s] %s %s failed: %s", ctx.request_id, ctx.method, ctx.path, tostring(err)))
+    if ctx.res:is_sent() then return end
+    if self.error_handler then
+        local handled, response = pcall(self.error_handler, ctx, err)
+        if handled and response ~= nil and ctx.res:is_sent() then return response end
+        if not handled then
+            self.logger("error", string.format("[%s] error_handler failed: %s", ctx.request_id, tostring(response)))
+        end
+    end
+    return ctx:error(500, "internal server error", self.config.debug and err or nil, "internal_error")
+end
+
 function Application:handle(request, writer)
     request.request_id = request_id(request)
     local ctx = Context.new(request, writer)
+    ctx.app = self
+    ctx.config = self.config
     ctx.view_renderer = self.view_renderer
     ctx.debug = self.config.debug
     ctx.res:header("X-Request-Id", ctx.request_id)
     if request.body_error then
-        return ctx:error(400, request.body_error, nil, request.body_error_code)
+        local details = self.config.debug and request.body_error or nil
+        return ctx:error(400, "malformed request body", details, request.body_error_code or "malformed_body")
     end
+    local middleware = self.middleware
     local function dispatch(index)
-        if index <= #self.middleware then
-            local middleware = self.middleware[index]
+        if index <= #middleware then
             local next_called = false
             local function next_middleware()
                 assert(not next_called, "middleware called next more than once")
                 next_called = true
                 return dispatch(index + 1)
             end
-            return middleware(ctx, next_middleware)
+            return middleware[index](ctx, next_middleware)
         end
-        local action, params, route = self.router:match(ctx.method, ctx.path)
-        if not action then
-            local allowed = self.router:allowed_methods(ctx.path)
-            if #allowed > 0 then
-                ctx.res:header("Allow", table.concat(allowed, ", "))
-                return ctx:error(405, "method not allowed", nil, "method_not_allowed")
-            end
-            return ctx:error(404, "route not found", nil, "route_not_found")
-        end
-        ctx.params = params
-        ctx.route = route
-        return action(ctx)
+        return self:_dispatch_route(ctx)
     end
     local ok, result = xpcall(function() return dispatch(1) end, debug.traceback)
-    if not ok then
-        if self.error_handler then
-            local handled, handler_error = pcall(self.error_handler, ctx, result)
-            if handled and handler_error ~= nil then return handler_error end
-        end
-        return ctx:error(500, "internal server error", self.config.debug and result or nil, "internal_error")
-    end
-    return result
+    if not ok then return self:_handle_error(ctx, result) end
+    local finalized, final_result = pcall(self._finalize, self, ctx, result)
+    if not finalized then return self:_handle_error(ctx, final_result) end
+    return final_result
 end
 
-function Application:run()
-    if not ngx then error("Application:run() requires OpenResty ngx") end
-    local headers = {}
-    for key, value in pairs(ngx.req.get_headers()) do headers[string.lower(key)] = value end
-    local request = {
-        method = ngx.req.get_method(),
-        path = ngx.var.uri or "/",
-        headers = headers,
-        query = ngx.req.get_uri_args(),
-        request_id = ngx.var.request_id,
+local function ngx_writer(ngx_api)
+    return {
+        headers = {},
+        sent = false,
+        flush = function(writer)
+            ngx_api.status = writer.status
+            for name, value in pairs(writer.headers) do ngx_api.header[name] = value end
+            if writer.body ~= "" then ngx_api.print(writer.body) end
+        end,
     }
-    ngx.req.read_body()
-    local body = ngx.req.get_body_data()
-    request.raw_body = body
-    local content_type = headers["content-type"] or ""
-    if body and content_type:match("^application/json") then
-        if not cjson then
-            request.body_error = "JSON support is unavailable"
-        else
-            local decoded, decode_error = cjson.decode(body)
-            if decoded == nil and decode_error then
-                request.body_error = decode_error
-            else
-                request.body = decoded
-            end
-        end
-    elseif body and content_type:match("^application/x%-www%-form%-urlencoded") then
-        local decoded, decode_error = parse_form(body)
-        if not decoded then
-            request.body_error = decode_error
-            request.body_error_code = "malformed_form"
-        else
-            request.body = decoded
-        end
-    else
-        request.body = body
-    end
-    return self:handle(request, { headers = {}, sent = false })
+end
+
+-- Entry point for content_by_lua. `ngx_api` defaults to the global `ngx` and
+-- exists so tests can drive the full request path with a fake.
+function Application:run(ngx_api)
+    ngx_api = ngx_api or ngx
+    if not ngx_api then error("Application:run() requires OpenResty ngx") end
+    local request = Request.from_ngx(ngx_api)
+    return self:handle(request, ngx_writer(ngx_api))
 end
 
 return Application

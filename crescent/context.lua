@@ -1,4 +1,5 @@
 local Response = require("crescent.response")
+local Validation = require("crescent.validation")
 
 local Context = {}
 Context.__index = Context
@@ -14,6 +15,7 @@ function Context.new(request, writer)
         headers = headers,
         query = query,
         request_id = request.request_id,
+        remote_addr = request.remote_addr,
         params = {},
         state = {},
         body = request.body,
@@ -22,7 +24,22 @@ function Context.new(request, writer)
 end
 
 function Context:get_header(name)
-    return self.headers[string.lower(name)]
+    local value = self.headers[string.lower(name)]
+    if type(value) == "table" then return value[1] end
+    return value
+end
+
+-- Returns the token from `Authorization: Bearer <token>`, or nil.
+function Context:get_bearer()
+    local authorization = self:get_header("authorization")
+    if type(authorization) ~= "string" then return nil end
+    local token = authorization:match("^[Bb][Ee][Aa][Rr][Ee][Rr]%s+(%S+)%s*$")
+    return token
+end
+
+function Context:header(name, value)
+    self.res:header(name, value)
+    return self
 end
 
 function Context:json(code, value)
@@ -35,6 +52,14 @@ end
 
 function Context:html(code, value)
     return self.res:status(code):html(value)
+end
+
+function Context:no_content()
+    return self.res:no_content()
+end
+
+function Context:redirect(location, code, options)
+    return self.res:redirect(location, code, options)
 end
 
 function Context:view(name, data, code)
@@ -53,7 +78,6 @@ function Context:error(code, message, details, identifier)
 end
 
 function Context:validate(schema, source)
-    local Validation = require("crescent.validation")
     local data = self[source or "body"]
     local valid, errors = Validation.validate(data or {}, schema)
     self.validation_errors = errors
