@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# Runs the Crescent CLI on OpenResty's LuaJIT (the runtime that serves
+# requests) from the project root. Override the binary with RESTY_BIN.
+set -eu
+
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+resty="${RESTY_BIN:-}"
+if [ -z "$resty" ]; then
+	for candidate in /opt/homebrew/opt/openresty/bin/resty /usr/local/openresty/bin/resty /opt/openresty/bin/resty; do
+		if [ -x "$candidate" ]; then resty="$candidate"; break; fi
+	done
+fi
+resty="${resty:-resty}"
+
+# `new` creates the project in the caller's directory, not in $root.
+export CRESCENT_CWD="$PWD"
+export CRESCENT_HOME="$root"
+
+cd "$root"
+exec "$resty" -I "$root/lua_modules/share/lua/5.1" --shdict 'crescent_limits 1m' "$root/cli.lua" "$@"

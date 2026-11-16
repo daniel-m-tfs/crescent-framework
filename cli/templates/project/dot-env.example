@@ -1,0 +1,21 @@
+APP_ENV=development
+APP_DEBUG=true
+
+# MySQL (lua-resty-mysql). Every variable used at runtime must also be listed
+# with an `env NAME;` directive in nginx.conf.
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_NAME={{db_name}}_dev
+DB_TEST_NAME={{db_name}}_test
+DB_USER=crescent
+DB_PASSWORD=
+
+JWT_SECRET=
+
+# SMTP (crescent.mail). Also list these with `env NAME;` in nginx.conf.
+SMTP_SERVER=127.0.0.1
+SMTP_PORT=1025
+SMTP_USER=
+SMTP_PASSWORD=
+SMTP_FROM=no-reply@example.com
+SMTP_FROM_NAME={{project}}

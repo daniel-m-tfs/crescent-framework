@@ -1,0 +1,11 @@
+*.log
+logs/*.pid
+.env
+.env.*
+!.env.example
+lua_modules/
+.DS_Store
+.vscode/
+*_temp/
+tmp/*
+!tmp/.gitkeep
