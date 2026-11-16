@@ -97,6 +97,7 @@ local function crud_tests()
 
     local found = User:find(ada:get("id"))
     tests.assertEquals(found:get("bio"), "It's 50% \"quoted\" ?")
+    tests.assertEquals(found:get("id"), ada:get("id"), "BIGINT ids have the same type after INSERT and SELECT")
     tests.assertNotNil(found:get("created_at"))
 
     tests.assertNotNil(found:update({ name = "Ada Lovelace" }))

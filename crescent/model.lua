@@ -139,8 +139,50 @@ function Model:new(attributes)
 end
 
 -- Instance for a row read from the database: bypasses fillable, exists = true.
+-- lua-resty-mysql returns BIGINT columns as strings (they may exceed 2^53),
+-- so ids would be numbers after an INSERT but strings after a SELECT. On
+-- hydrate, the primary key and `*_id` columns holding a canonical integer
+-- that fits in a double become numbers. `casts = { column = "string" |
+-- "number" | "integer" | "boolean" }` overrides this per column (e.g. keep
+-- an `external_id` VARCHAR as text).
+local function canonical_integer(value)
+    if type(value) == "string" and #value <= 15 and (value == "0" or value:match("^%-?[1-9]%d*$")) then
+        return tonumber(value)
+    end
+    return nil
+end
+
+local CASTS = {
+    string = function(value) return tostring(value) end,
+    number = function(value) return tonumber(value) or value end,
+    integer = function(value) return canonical_integer(value) or value end,
+    boolean = function(value)
+        if value == 1 or value == "1" or value == true then return true end
+        if value == 0 or value == "0" or value == false then return false end
+        return value
+    end,
+}
+
+local function cast_attributes(class, attributes)
+    local casts = class.casts or {}
+    for column, value in pairs(attributes) do
+        if value ~= nil and value ~= Sql.NULL then
+            local cast = casts[column]
+            if cast then
+                local convert = CASTS[cast]
+                if not convert then error("unknown cast '" .. tostring(cast) .. "' for " .. column, 0) end
+                attributes[column] = convert(value)
+            elseif column == class.primary_key or (type(column) == "string" and column:match("_id$")) then
+                attributes[column] = canonical_integer(value) or value
+            end
+        end
+    end
+    return attributes
+end
+
 function Model:hydrate(row)
-    return blank(class_of(self), copy(row), true)
+    local class = class_of(self)
+    return blank(class, cast_attributes(class, copy(row)), true)
 end
 
 function Model:hydrate_all(rows)

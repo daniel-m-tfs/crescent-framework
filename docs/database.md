@@ -162,6 +162,34 @@ Regras:
   apagadas, salvo `with_trashed()`/`only_trashed()`. `query():delete()` em massa
   também vira UPDATE; `force_delete()` apaga de fato.
 
+### Tipos das colunas (`casts`)
+
+O `lua-resty-mysql` devolve colunas `BIGINT` como string (podem passar de
+2^53). Ao carregar um registro, a chave primária e as colunas `*_id` com um
+inteiro canônico de até 15 dígitos viram número — o `id` tem o mesmo tipo
+depois de um INSERT e de um SELECT. Para outras colunas, ou para manter uma
+`*_id` textual, declare `casts`:
+
+```lua
+local Product = Model:extend({
+    table = "products",
+    casts = { external_id = "string", active = "boolean", price = "number" },
+})
+```
+
+Casts disponíveis: `string`, `number`, `integer`, `boolean` (`1`/`0` → `true`/`false`).
+
+### Paginação
+
+```lua
+local page = Product:page(ctx.query.page, ctx.query.per_page)
+-- page.data = { models }, page.meta = { page, per_page, total, last_page, from, to }
+Product:where("active", 1):order_by("name"):page(2, 20)
+```
+
+Valores inválidos de `page`/`per_page` caem no padrão (1 e 15) e `per_page`
+é limitado a 100 (`{ max_per_page = n }` no terceiro argumento).
+
 ### Relações
 
 Um único estilo: a tabela `relations` na definição.
@@ -235,6 +263,18 @@ resty -I lua_modules/share/lua/5.1 cli/commands/db.lua make_migration create_use
 Os comandos carregam `crescent.config` (`APP_ENV`) e chamam
 `Database.configure(config.database)`. O nome da migration deve casar com
 `^[%a][%w_]*$`.
+
+## Seeders
+
+```bash
+bin/crescent make:seeder 01_admin_user   # cria seeds/01_admin_user.lua
+bin/crescent db:seed                     # roda todos, em ordem de nome
+bin/crescent db:seed 01_admin_user       # só um
+```
+
+Cada seeder é `return function(db) ... end` e roda na sua própria transação
+(erro ou `return false` desfaz). Não há registro de execução: escreva
+seeders idempotentes quando puderem rodar mais de uma vez.
 
 ## Testes
 
