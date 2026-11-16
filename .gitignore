@@ -11,3 +11,4 @@ lua_modules/
 *_temp/
 tmp/*
 !tmp/.gitkeep
+.claude/

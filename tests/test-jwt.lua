@@ -261,7 +261,7 @@ local suite = {
         tests.assertFalse(ok)
         tests.assertEquals(err, "token revoked")
         tests.assertEquals(code, "token_revoked")
-        local ttl = ngx.shared.crescent_limits:ttl("jwt:revoked:test-jti")
+        local ttl = ngx.shared.crescent_jwt:ttl("jwt:revoked:test-jti")
         tests.assertTrue(ttl > 0 and ttl <= 60, "revocation entry expires with the token")
         jwt.unrevoke("test-jti")
         tests.assertTrue(jwt.verify(token, "secret"))

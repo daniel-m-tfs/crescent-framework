@@ -49,15 +49,18 @@ end
 -- `unrevoke(jti)`. The default keeps entries in an ngx.shared dict, so a
 -- token revoked in one worker is rejected by all of them; each entry expires
 -- when the token itself would have, keeping the dict bounded.
+-- Without a dict name it prefers a dedicated `crescent_jwt` dict (so rate
+-- limit counters can never push revocations out) and falls back to
+-- `crescent_limits`.
 function JWT.shared_store(dict_name, prefix)
-    dict_name = dict_name or "crescent_limits"
     prefix = prefix or "jwt:revoked:"
     local function dict()
-        local shared = ngx and ngx.shared and ngx.shared[dict_name]
-        if not shared then
-            error("JWT revocation store requires `lua_shared_dict " .. dict_name .. "` in nginx.conf", 3)
+        local shared = ngx and ngx.shared
+        local selected = shared and (dict_name and shared[dict_name] or shared.crescent_jwt or shared.crescent_limits)
+        if not selected then
+            error("JWT revocation store requires `lua_shared_dict " .. (dict_name or "crescent_jwt") .. "` in nginx.conf", 3)
         end
-        return shared
+        return selected
     end
     return {
         revoke = function(jti, ttl)

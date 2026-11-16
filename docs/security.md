@@ -67,8 +67,8 @@ jwt.revoke(payload)          -- ou jwt.revoke(jti, exp)
 jwt.unrevoke(jti)
 ```
 
-A lista de revogados fica em `ngx.shared.crescent_limits` (prefixo
-`jwt:revoked:`), visível para todos os workers; cada entrada expira junto
+A lista de revogados fica em `ngx.shared.crescent_jwt` (ou, se ele não
+existir, `crescent_limits`; prefixo `jwt:revoked:`), visível para todos os workers; cada entrada expira junto
 com o token. Para usar outro armazenamento (Redis, banco), implemente
 `{ revoke(jti, ttl), is_revoked(jti), unrevoke(jti) }` e chame
 `jwt.set_revocation_store(store)` ou passe `{ revocation = store }`.
