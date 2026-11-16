@@ -23,6 +23,11 @@ local function adapter_tests()
     tests.assertEquals(adapter:close("db"), "close:db")
     tests.assertTableEquals(calls, { "connect", "query", "execute", "transaction", "close" })
 
+    -- the MySQL adapter satisfies the contract
+    local MySQL = require("crescent.database.mysql")
+    local mysql = MySQL.new({ host = "127.0.0.1", database = "app", user = "app" }, { new = function() end })
+    tests.assertTrue(Adapter.new(mysql):is_adapter())
+
     tests.assertError(function() Adapter.new({}) end, "must implement connect()")
     tests.assertError(function() Adapter.new({ connect = function() end }) end, "must implement query()")
 end
