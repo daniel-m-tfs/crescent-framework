@@ -3,6 +3,7 @@ local Context = require("crescent.context")
 local Request = require("crescent.request")
 local Response = require("crescent.response")
 local View = require("crescent.view")
+local Database = require("crescent.database")
 
 local Application = {}
 Application.__index = Application
@@ -64,7 +65,14 @@ function Application.new(config)
         assert(type(config.error_handler) == "function", "error_handler must be a function")
     end
     local merged = merge({ debug = false, environment = "production" }, config)
+    -- The database adapter connects lazily (pooled per worker), so configuring
+    -- it at boot — even in init_by_lua — opens no connection.
+    local db = config.db
+    if not db and type(config.database) == "table" and config.database.database then
+        db = Database.configure(config.database)
+    end
     return setmetatable({
+        db = db,
         config = merged,
         router = Router.new(),
         view_renderer = config.view_renderer
@@ -134,7 +142,17 @@ function Application:_finalize(ctx, result)
     return ctx:error(500, "internal server error", nil, "empty_response")
 end
 
+-- Errors raised as tables with a 4xx `status` (e.g. Model:find_or_fail) are
+-- client errors, not failures: answer them without logging an error.
+local function client_error(err)
+    return type(err) == "table" and type(err.status) == "number" and err.status >= 400 and err.status < 500
+end
+
 function Application:_handle_error(ctx, err)
+    if client_error(err) and not ctx.res:is_sent() then
+        local message = err.status == 404 and "resource not found" or (err.public_message or "request failed")
+        return ctx:error(err.status, message, self.config.debug and err.message or nil, err.code or "http_error")
+    end
     self.logger("error", string.format("[%s] %s %s failed: %s", ctx.request_id, ctx.method, ctx.path, tostring(err)))
     if ctx.res:is_sent() then return end
     if self.error_handler then
@@ -152,6 +170,7 @@ function Application:handle(request, writer)
     local ctx = Context.new(request, writer)
     ctx.app = self
     ctx.config = self.config
+    ctx.db = self.db
     ctx.view_renderer = self.view_renderer
     ctx.debug = self.config.debug
     ctx.res:header("X-Request-Id", ctx.request_id)

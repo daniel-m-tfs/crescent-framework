@@ -1,137 +1,82 @@
 # NEWCrescent
 
-Crescent rebuilt for Lua + OpenResty, preserving the existing Crescent module style while delegating HTTP runtime responsibilities to OpenResty/Nginx.
+O Crescent reconstruído sobre **Lua + OpenResty**. O OpenResty/Nginx cuida do
+HTTP (TLS, workers, keep-alive, limites, arquivos estáticos); o framework cuida
+de rotas, actions, middleware, validação, erros, ORM/MySQL, templates, segurança
+e CLI.
 
-## Requirements
+## Requisitos
 
-- OpenResty with LuaJIT
-- LuaRocks for optional database adapters
-- A supported database adapter configured by the application
+- OpenResty (LuaJIT) — inclui `lua-resty-mysql`, `lua-resty-openssl`, `lua-resty-limit-traffic`
+- LuaRocks — dependências puras em `lua_modules/` (`etlua`, `lua-resty-http`, `lua-resty-mail`)
+- MySQL/MariaDB
 
-## Development
-
-```bash
-cp .env.example .env
-/opt/homebrew/opt/openresty/bin/openresty -p "$PWD/" -c nginx.conf
-```
-
-The application loads `config.<APP_ENV>` through `crescent.config`; when
-`APP_ENV` is not set, it uses `development`. Environment files are a local
-convenience only, and production secrets should come from the process
-environment or a secret manager.
-
-Pure input validation is available through `crescent.validation`. Schemas use
-rules such as `required`, `type`, `string`, `number`, `email`, `min_length`,
-`max_length`, `length`, `range`, `format`, and `custom`. Validation returns
-`true, {}` for valid input or `false, errors` with stable error `code` and
-public `message` fields.
-Actions can enforce a schema with `app:validated(schema, action, source)`;
-`source` defaults to `body` and can be `params`, `query`, or `headers`. Invalid
-input returns HTTP `422` before the wrapped action runs.
-
-Framework errors include a stable `code`, such as `route_not_found`,
-`method_not_allowed`, `validation_failed`, and `internal_error`. Internal
-details are included only when application debug mode is enabled.
-An environment config may provide `error_handler(ctx, error)`; it must return a
-response. If it raises or returns `nil`, Crescent uses the safe internal error
-response instead.
-Every response includes an `X-Request-Id` header. A valid upstream request ID
-is preserved; otherwise Crescent generates one for the request.
-
-Para desenvolvimento, o `nginx.conf` usa `lua_code_cache off` para recarregar
-modulos sem restart. Em producao, habilite `lua_code_cache on`.
-
-Teste manual:
+## Início rápido
 
 ```bash
+./deps.sh                      # instala dependências em ./lua_modules
+cp .env.example .env           # configure DB_*, JWT_SECRET, SMTP_*
+./bin/crescent server start    # openresty -p . -c nginx.conf (porta 8080)
 curl http://127.0.0.1:8080/health
+./bin/crescent make:module Product
+./bin/crescent db:migrate
 ```
 
-The first vertical slice exposes `GET /health`.
-The OpenResty entrypoint reads the request body before dispatching the action;
-actions access it through `ctx.body`. JSON requests are decoded using
-`cjson.safe`; the original text remains available as `ctx.raw_body`, and
-malformed JSON returns `400 malformed_json` before dispatch.
-URL-encoded forms are decoded into `ctx.body`, including `+` spaces, percent
-encoding, and repeated fields as arrays; malformed input returns
-`400 malformed_form`.
+Em produção use `conf/nginx.production.conf` (revise antes):
+`APP_ENV=production openresty -p /srv/app/ -c conf/nginx.production.conf`.
 
-Routes support required parameters such as `/users/{id}`, optional parameters
-such as `/users/{id?}`, and final-segment wildcards such as
-`/assets/{path*}`. Matching precedence is literal, parameter, then wildcard.
-Routes can be grouped and named through `app:group("/api", ...)`, a third
-argument such as `app:get("/health", action, "api.health")`, and
-`app:route("api.health")`.
-Application middleware uses `app:use(function(ctx, next) ... end)`. Middleware
-can mutate `ctx.state`, wrap `next()`, or return a response to short-circuit
-the request before routing.
+## Como funciona
 
-## Tests
+- `app.lua` monta a aplicação **uma vez por worker**; o Nginx chama
+  `require("app"):run()` a cada requisição (`content_by_lua_block`).
+- Configuração por ambiente em `config/<APP_ENV>.lua`, lida via
+  `crescent.env` (variável do processo > `.env` > padrão). **Toda variável
+  usada precisa de uma diretiva `env NOME;` no nginx.conf** — o Nginx limpa o
+  ambiente dos workers.
+- Actions recebem `ctx` e respondem com `ctx:json`, `ctx:text`, `ctx:html`,
+  `ctx:view`, `ctx:redirect`, `ctx:no_content` ou `ctx:error(status, msg,
+  detalhes, codigo)`. Retornar uma tabela/string envia 200 JSON/texto.
+- Middleware: `app:use(function(ctx, next) ... return next() end)`; para
+  bloquear, retorne uma resposta sem chamar `next()`.
+- Rotas: `/users/{id}`, opcionais `/{id?}`, wildcard `/{path*}`, grupos
+  `app:group("/api", fn)`, nomes `app:get(path, action, "users.show")`.
+  HEAD usa a rota GET; 405 inclui `Allow`.
+- Erros têm `code` estável; detalhes internos só com `debug = true`. Todo 500 é
+  registrado no error log com o request id. Erros com `status` 4xx (ex.:
+  `Model:find_or_fail`) viram a resposta correspondente.
+- `X-Request-Id`: preserva o do proxy, senão usa `$request_id` do Nginx.
+- Bodies JSON e form são decodificados em `ctx.body` (`ctx.raw_body` mantém o
+  texto); bodies gravados em disco pelo Nginx também são lidos.
 
-The initial tests are pure Lua and do not require OpenResty:
+## Documentação
+
+| Tema | Arquivo |
+|---|---|
+| Banco, Query Builder, ORM, migrations | [docs/database.md](docs/database.md) |
+| JWT, senhas, auth, CORS, headers, rate limit | [docs/security.md](docs/security.md) |
+| CLI (`new`, `make:*`, `server`, `routes`, `db:*`) | [docs/cli.md](docs/cli.md) |
+| HTTP client e e-mail | [docs/integrations.md](docs/integrations.md) |
+
+## Testes
 
 ```bash
-lua cli.lua test
-# or
-./test.sh
-
-# Requires OpenResty and curl
-lua cli.lua test:http
+./test.sh                  # unitários (no LuaJIT do OpenResty via resty) + HTTP real
+lua cli.lua test jwt       # filtra por nome de arquivo
 ```
 
-The test suites use the adapted `crescent.utils.tests` helper from the original
-Crescent Framework. It keeps the assertion and suite API familiar while
-remaining independent of Luvit and the original `json` module.
+Os testes de integração MySQL são pulados sem credenciais. Para rodá-los,
+use um usuário com acesso apenas ao banco de teste:
 
-The `test:http` command starts the local OpenResty configuration and verifies
-real HTTP responses for health, 404, 405, `Allow`, and `X-Request-Id`.
+```bash
+DB_USER=... DB_PASSWORD=... DB_HOST=127.0.0.1 DB_PORT=3306 \
+DB_TEST_NAME=newcrescent_test lua cli.lua test mysql-integration
+```
 
-Database access starts with the driver-independent contract in
-`crescent.database.adapter`. Drivers are injected and must implement
-`connect`, `query`, `execute`, `transaction`, and `close`; no database driver
-is loaded by the framework yet.
-`crescent.database.query_builder` generates SQL and bindings separately. Table
-and column identifiers are allowlisted; values are always emitted as `?`
-bindings and are never interpolated into SQL.
-Builders can execute through an injected adapter with `fetch(adapter)` or
-`execute(adapter)`; the builder owns SQL generation, while the adapter owns
-connections and result handling.
-Declarative models are available through `crescent.model`. The current
-foundation supports `table`, `fillable`, `guarded`, `hidden`, `timestamps`,
-validation, `get`/`set`, and safe `to_table` serialization; persistence and
-soft-delete state are available. Persistence remains separate database work;
-`save(adapter)` now persists inserts and updates through the injected adapter;
-insert adapters should return `{ insert_id = ... }` when the database creates a
-primary key, so subsequent saves can target the row safely;
-models with `validates = { field = { unique = true } }` perform a parameterized
-uniqueness lookup through the injected adapter during `save`; a real database
-unique constraint is still required for race-free enforcement;
-soft-delete `delete` and `restore` remain state operations until database
-mutation wiring is added.
-Relations are declared with `relations` and loaded explicitly through
-`model:relation(name, adapter)`. They never run automatically during
-serialization, preventing hidden N+1 queries.
-Views use the installed ETLua engine through `crescent.view`. `<%= value %>`
-is HTML-escaped, while `<%- value %>` is reserved for explicitly trusted HTML.
-Template names are constrained to the configured local views root; user-supplied
-templates and path traversal are rejected.
-Actions can return `ctx:view("hello.etlua", data)`; this sends an HTML response
-with the configured application view renderer.
-The renderer also exposes `partial(name, data)` and `render_layout(layout,
-content, data)` for explicit composition within the configured views root.
-Helpers can be registered with `view:helper("name", fn)` and are available to
-templates without overwriting keys passed in page data.
-Template caching is enabled by default and can be disabled with
-`View.new(root, { cache = false })`; `clear(name)` and `reload(name)` invalidate
-individual compiled templates.
-Migrations use `crescent.database.migration`: migrations are sorted by name,
-executed individually through the adapter, and recorded only after success.
-The runner does not wrap DDL in an assumed transaction.
-The first concrete driver is [pgmoon](https://github.com/leafo/pgmoon), a pure
-Lua PostgreSQL driver designed for OpenResty cosockets. It is wrapped by
-`crescent.database.pgmoon`, loaded lazily, and configured with `DB_*` values by
-the application; tests use an injected fake and do not require a live database.
+## Migração a partir do Crescent (Luvit)
 
-The imported CLI currently exposes `test` and `help`. Database, server, and
-code-generation commands remain disabled until their OpenResty-compatible
-implementations are ready.
+- `ctx.json(...)` → `ctx:json(...)` (dois-pontos em todo o contexto).
+- Middleware: `return false` para interromper → retornar uma resposta sem `next()`.
+- Opções de JWT em snake_case (`expires_in`, `not_before`).
+- Hashes de senha do Crescent antigo (`iter$salt$hash`) continuam válidos.
+- `crescent.utils.http` → `crescent.http_client`; `crescent.utils.mail` → `crescent.mail`.
+- Arquivos estáticos: sirva pelo Nginx (`location /public/`), não por middleware.

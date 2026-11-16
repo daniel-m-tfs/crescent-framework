@@ -173,6 +173,25 @@ local function header_injection_is_rejected()
     tests.assertNil(writer.headers["X-Test"])
 end
 
+local function client_errors_become_4xx()
+    local Model = require("crescent.model")
+    local User = Model:extend({ table = "users" })
+    local fake_db = {
+        query = function() return {} end,
+        execute = function() return { affected_rows = 0 } end,
+        transaction = function() end, connect = function() end, close = function() end,
+    }
+    local app, logged = silent_app({ db = fake_db })
+    app:get("/users/{id}", function(ctx)
+        return ctx:json(200, User:find_or_fail(tonumber(ctx.params.id), ctx.db):to_table())
+    end)
+    local writer = handle(app, { method = "GET", path = "/users/9" })
+    tests.assertEquals(writer.status, 404)
+    tests.assertContains(writer.body, '"code":"model_not_found"')
+    tests.assertNotContains(writer.body, "users not found")
+    tests.assertEquals(#logged, 0, "client errors are not logged as failures")
+end
+
 local function env_precedence()
     local Env = require("crescent.env")
     local parsed = Env.parse('A=1\nexport B="two words"\n# comment\nC=3 # inline\nD=\'x # y\'\n')
@@ -196,4 +215,5 @@ assert(tests.runSuite("Runtime", {
     response_helpers = response_helpers,
     header_injection_is_rejected = header_injection_is_rejected,
     env_precedence = env_precedence,
+    client_errors_become_4xx = client_errors_become_4xx,
 }))

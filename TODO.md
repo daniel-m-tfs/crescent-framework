@@ -5,9 +5,9 @@ Roadmap para reconstruir o Crescent sobre Lua + OpenResty, inspirado no modelo d
 ## Decisoes de arquitetura
 
 - [x] Definir OpenResty/Nginx como runtime HTTP oficial.
-- [ ] Remover a dependencia conceitual de Luvit, LuaSocket e APIs HTTP proprias do framework.
-- [ ] Suportar primeiro a versao LuaJIT/Lua 5.1 fornecida pelo OpenResty; documentar compatibilidade antes de considerar Lua 5.4.
-- [ ] Usar APIs oficiais do OpenResty para request, response, timers, cosockets, TLS, buffering, limites e workers.
+- [x] Remover a dependencia conceitual de Luvit, LuaSocket e APIs HTTP proprias do framework.
+- [x] Suportar primeiro a versao LuaJIT/Lua 5.1 fornecida pelo OpenResty; documentar compatibilidade antes de considerar Lua 5.4.
+- [x] Usar APIs oficiais do OpenResty para request, response, timers, cosockets, TLS, buffering, limites e workers.
 - [x] Manter o framework responsavel somente por: rotas, actions, configuracao, validacao, excecoes, modelos, queries, templates, testes e CLI.
 - [ ] Definir uma API publica pequena e estavel antes de portar implementacoes antigas.
 - [x] Usar o Crescent Framework atual como base de estilo e fonte de migracao, preservando nomes, organizacao e ergonomia onde nao houver acoplamento ao Luvit.
@@ -16,14 +16,14 @@ Roadmap para reconstruir o Crescent sobre Lua + OpenResty, inspirado no modelo d
 
 - [ ] Criar uma matriz de migracao com as colunas: modulo antigo, reutilizar, adaptar ou reescrever, dependencia de Luvit, testes existentes e destino no NEWCrescent.
 - [x] Reaproveitar a organizacao `src/<modulo>/{controllers,services,models,routes}` e manter o fluxo `Module.register(app)`.
-- [ ] Reaproveitar o estilo de controllers/actions: receber `ctx`, chamar service e retornar `ctx.json`, `ctx.text`, `ctx.view` ou `ctx.error`.
-- [ ] Reaproveitar o estilo de models declarativos: `table`, `fillable`, `guarded`, `hidden`, `timestamps`, `validates`, `relations` e hooks.
-- [ ] Reaproveitar a CLI e seus comandos `new`, `make:*`, `migrate`, `test` e `server`, trocando apenas o bootstrap e os comandos dependentes de Luvit.
+- [x] Reaproveitar o estilo de controllers/actions: receber `ctx`, chamar service e retornar `ctx.json`, `ctx.text`, `ctx.view` ou `ctx.error`.
+- [x] Reaproveitar o estilo de models declarativos: `table`, `fillable`, `guarded`, `hidden`, `timestamps`, `validates`, `relations` e hooks.
+- [x] Reaproveitar a CLI e seus comandos `new`, `make:*`, `migrate`, `test` e `server`, trocando apenas o bootstrap e os comandos dependentes de Luvit.
 - [ ] Reaproveitar templates, views, layouts, partials e convencoes de nomes, revisando o engine ETLua e o contexto de renderizacao para LuaJIT/OpenResty.
 - [ ] Reaproveitar validadores, serializacao e helpers de teste depois de remover dependencias de `require`, `http`, `timer` e outros modulos do Luvit.
-- [ ] Reaproveitar o Query Builder somente depois de separar SQL, bindings e conexao em uma interface de adapter.
-- [ ] Reaproveitar migrations e o formato de arquivos, mas remover suposicoes de MySQL e declarar capacidades especificas por adapter.
-- [ ] Reaproveitar os testes de seguranca como regressao obrigatoria durante a migracao.
+- [x] Reaproveitar o Query Builder somente depois de separar SQL, bindings e conexao em uma interface de adapter.
+- [x] Reaproveitar migrations e o formato de arquivos, mas remover suposicoes de MySQL e declarar capacidades especificas por adapter.
+- [x] Reaproveitar os testes de seguranca como regressao obrigatoria durante a migracao.
 - [ ] Nao copiar `server.lua`, `request.lua`, `response.lua`, `bootstrap.lua`, `utils/http.lua` ou o connection manager antigo sem revisao: sao os pontos mais acoplados ao Luvit/MySQL.
 - [ ] Nao transportar mocks que simulam sucesso, fallbacks silenciosos, limites especificos do runtime antigo ou contratos nao documentados.
 - [ ] Portar primeiro um modulo vertical completo, da rota ao banco e template, antes de migrar todo o framework.
@@ -77,7 +77,7 @@ Roadmap para reconstruir o Crescent sobre Lua + OpenResty, inspirado no modelo d
 - [x] Criar response API inicial: status, headers, texto e JSON.
 - [x] Definir o ciclo de execucao de uma action dentro de `content_by_lua` ou entrypoint equivalente.
 - [x] Tratar excecoes Lua com `xpcall` e error handler global.
-- [ ] Impedir vazamento de stack trace e dados sensiveis em producao.
+- [x] Impedir vazamento de stack trace e dados sensiveis em producao.
 - [ ] Definir comportamento para request abortada, timeout e erro de cosocket.
 - [x] Criar request id e propaga-lo para logs e respostas.
 - [x] Documentar o que pertence ao entrypoint OpenResty e o que pertence ao framework.
@@ -101,8 +101,8 @@ Roadmap para reconstruir o Crescent sobre Lua + OpenResty, inspirado no modelo d
 
 - [x] Criar loader de configuracao por ambiente.
 - [x] Validar tipos, faixas e valores obrigatorios no boot.
-- [ ] Separar configuracao da aplicacao da configuracao Nginx/OpenResty.
-- [ ] Suportar `.env` somente como conveniencia local; em producao usar environment/secret manager.
+- [x] Separar configuracao da aplicacao da configuracao Nginx/OpenResty.
+- [x] Suportar `.env` somente como conveniencia local; em producao usar environment/secret manager.
 - [ ] Redigir segredos em logs e mensagens de erro.
 - [ ] Criar `config/example.lua` e `.env.example` sem credenciais reais.
 - [ ] Criar teste de configuracao incompleta e configuracao invalida.
@@ -121,12 +121,13 @@ Roadmap para reconstruir o Crescent sobre Lua + OpenResty, inspirado no modelo d
 
 - [x] Definir interface de adapter independente do banco: connect, query, execute, transaction e close.
 - [x] Implementar o primeiro adapter com biblioteca LuaRocks mantida e documentar a escolha.
-- [ ] Avaliar MySQL/MariaDB, PostgreSQL e SQLite separadamente; nao acoplar o ORM a um unico banco.
+- [x] Decisao (2026-11): somente MySQL por enquanto (`lua-resty-mysql`); pgmoon removido.
+- [ ] Rodar os testes de integracao MySQL com credenciais reais (usuario restrito ao banco de teste).
 - [ ] Usar prepared statements nativos quando o adapter oferecer suporte.
 - [ ] Manter bindings parametrizados como requisito de seguranca.
-- [ ] Definir pool/conexao por worker conforme as regras do OpenResty e do driver escolhido.
+- [x] Definir pool/conexao por worker conforme as regras do OpenResty e do driver escolhido.
 - [ ] Implementar timeout, retry limitado, rollback e liberacao de conexao.
-- [ ] Definir contrato de retorno de query, cursor, affected rows e erros.
+- [x] Definir contrato de retorno de query, cursor, affected rows e erros.
 - [x] Definir contrato inicial de retorno de query e erros para o Query Builder.
 - [x] Implementar Query Builder com identificadores validados e valores parametrizados.
 - [x] Implementar fundacao de modelos, fillable/guarded, timestamps e serializacao.
@@ -135,7 +136,7 @@ Roadmap para reconstruir o Crescent sobre Lua + OpenResty, inspirado no modelo d
 - [x] Implementar verificacao de unicidade apoiada pelo adapter; constraints do schema continuam obrigatorias.
 - [x] Implementar runner de migrations sem assumir que todo DDL e transacional.
 - [x] Implementar relações lazy sem N+1 implícito.
-- [ ] Planejar eager loading.
+- [x] Planejar eager loading.
 - [ ] Adicionar EXPLAIN e testes de indices para queries importantes.
 - [ ] Criar testes com SQLite quando possivel e testes de integracao com cada banco suportado.
 
@@ -153,15 +154,16 @@ Roadmap para reconstruir o Crescent sobre Lua + OpenResty, inspirado no modelo d
 
 ## Fase 7 - CLI
 
-- [ ] Criar comando `new` para gerar uma aplicacao OpenResty funcional.
-- [ ] Criar `make:action`, `make:model`, `make:validator`, `make:route` e `make:migration`.
-- [ ] Criar `db:migrate`, `db:rollback`, `db:status` e `db:seed`.
-- [ ] Validar nomes de projeto, modulo e arquivo antes de filesystem ou shell.
+- [x] Criar comando `new` para gerar uma aplicacao OpenResty funcional.
+- [x] Criar `make:action`, `make:model`, `make:validator`, `make:route` e `make:migration`.
+- [x] Criar `db:migrate`, `db:rollback` e `db:status`.
+- [ ] Criar `db:seed`.
+- [x] Validar nomes de projeto, modulo e arquivo antes de filesystem ou shell.
 - [ ] Evitar shell injection e preferir APIs Lua/filesystem estruturadas.
 - [x] Criar `test`.
 - [ ] Criar `lint`, `check` e `routes`.
-- [ ] Gerar configuracao Nginx/OpenResty apenas como template revisavel, sem esconder responsabilidades de deploy.
-- [ ] Testar a CLI em diretorio temporario e com entradas maliciosas.
+- [x] Gerar configuracao Nginx/OpenResty apenas como template revisavel, sem esconder responsabilidades de deploy.
+- [x] Testar a CLI em diretorio temporario e com entradas maliciosas.
 
 ## Fase 8 - Testes
 
