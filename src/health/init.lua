@@ -1,8 +1,10 @@
+local Health = require("crescent.health")
+
 local Module = {}
 
+-- GET /health (liveness) and GET /ready (checks the database when configured).
 function Module.register(app)
-    local routes = require("src.health.routes.health")
-    routes(app, "/health")
+    Health.register(app, { service = "newcrescent" })
 end
 
 return Module

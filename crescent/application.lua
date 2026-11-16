@@ -38,12 +38,12 @@ local function merge(left, right)
     return result
 end
 
-local function default_logger(level, message)
-    if ngx and ngx.log then
-        ngx.log(level == "error" and ngx.ERR or ngx.WARN, message)
-    else
-        io.stderr:write("[", level, "] ", message, "\n")
-    end
+-- `config.logger` may be a crescent.logger instance or a plain
+-- function(level, message, fields).
+local function make_logger(logger)
+    if type(logger) == "function" then return logger end
+    logger = logger or require("crescent.logger").new()
+    return function(level, message, fields) logger:log(level, message, fields) end
 end
 
 -- Relative paths are resolved against `config.root` when given, otherwise
@@ -78,7 +78,7 @@ function Application.new(config)
         view_renderer = config.view_renderer
             or View.new(resolve_path(config.views_root or "views", config.root), { cache = not merged.debug }),
         error_handler = config.error_handler,
-        logger = config.logger or default_logger,
+        logger = make_logger(config.logger),
         middleware = {},
     }, Application)
 end
@@ -138,7 +138,8 @@ function Application:_finalize(ctx, result)
     if getmetatable(result) == Response then result = nil end
     if type(result) == "table" then return ctx:json(200, result) end
     if type(result) == "string" then return ctx:text(200, result) end
-    self.logger("error", string.format("[%s] %s %s produced no response", ctx.request_id, ctx.method, ctx.path))
+    self.logger("error", string.format("[%s] %s %s produced no response", ctx.request_id, ctx.method, ctx.path),
+        { request_id = ctx.request_id, method = ctx.method, path = ctx.path })
     return ctx:error(500, "internal server error", nil, "empty_response")
 end
 
@@ -153,13 +154,15 @@ function Application:_handle_error(ctx, err)
         local message = err.status == 404 and "resource not found" or (err.public_message or "request failed")
         return ctx:error(err.status, message, self.config.debug and err.message or nil, err.code or "http_error")
     end
-    self.logger("error", string.format("[%s] %s %s failed: %s", ctx.request_id, ctx.method, ctx.path, tostring(err)))
+    self.logger("error", string.format("[%s] %s %s failed: %s", ctx.request_id, ctx.method, ctx.path, tostring(err)),
+        { request_id = ctx.request_id, method = ctx.method, path = ctx.path })
     if ctx.res:is_sent() then return end
     if self.error_handler then
         local handled, response = pcall(self.error_handler, ctx, err)
         if handled and response ~= nil and ctx.res:is_sent() then return response end
         if not handled then
-            self.logger("error", string.format("[%s] error_handler failed: %s", ctx.request_id, tostring(response)))
+            self.logger("error", string.format("[%s] error_handler failed: %s", ctx.request_id, tostring(response)),
+                { request_id = ctx.request_id })
         end
     end
     return ctx:error(500, "internal server error", self.config.debug and err or nil, "internal_error")

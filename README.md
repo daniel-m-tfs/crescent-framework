@@ -17,7 +17,7 @@ e CLI.
 ./deps.sh                      # instala dependências em ./lua_modules
 cp .env.example .env           # configure DB_*, JWT_SECRET, SMTP_*
 ./bin/crescent server start    # openresty -p . -c nginx.conf (porta 8080)
-curl http://127.0.0.1:8080/health
+curl http://127.0.0.1:8080/health   # liveness; /ready verifica o banco
 ./bin/crescent make:module Product
 ./bin/crescent db:migrate
 ```
@@ -56,6 +56,7 @@ Em produção use `conf/nginx.production.conf` (revise antes):
 | JWT, senhas, auth, CORS, headers, rate limit | [docs/security.md](docs/security.md) |
 | CLI (`new`, `make:*`, `server`, `routes`, `db:*`) | [docs/cli.md](docs/cli.md) |
 | HTTP client e e-mail | [docs/integrations.md](docs/integrations.md) |
+| Logs estruturados, health/readiness | [docs/observability.md](docs/observability.md) |
 
 ## Testes
 

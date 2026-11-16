@@ -8,6 +8,12 @@ local lazy = {
     config = "crescent.config",
     validation = "crescent.validation",
     view = "crescent.view",
+    logger = "crescent.logger",
+    health = "crescent.health",
+    database = "crescent.database",
+    model = "crescent.model",
+    http_client = "crescent.http_client",
+    mail = "crescent.mail",
 }
 
 local groups = {
@@ -20,6 +26,7 @@ local groups = {
         cors = "crescent.middleware.cors",
         security_headers = "crescent.middleware.security_headers",
         rate_limit = "crescent.middleware.rate_limit",
+        request_log = "crescent.middleware.request_log",
     },
 }
 
