@@ -160,6 +160,26 @@ local function eager_loading_tests()
     tests.assertNil(loaded[1]:to_table().deleted_at)
 end
 
+local function value_tests()
+    local hostile = "x'); DROP TABLE `it_users`; -- \\ \0 ?"
+    local created = assert(User:create({ name = "Emoji 🌙 ação", email = "values@example.com", bio = hostile }))
+    local found = User:find(created:get("id"))
+    tests.assertEquals(found:get("name"), "Emoji 🌙 ação", "utf8mb4 must round-trip")
+    tests.assertEquals(found:get("bio"), hostile, "hostile values are stored literally")
+    tests.assertEquals(User:query():where("bio", hostile):count(), 1)
+    local rows = assert(db:query("SELECT COUNT(*) AS n FROM `it_users` WHERE `name` = ?", { "Emoji 🌙 ação" }))
+    tests.assertEquals(tonumber(rows[1].n), 1)
+    tests.assertNotNil(db:query("SELECT 1 FROM `it_users` LIMIT 1"), "table must still exist")
+end
+
+-- Pooled connections: the same MySQL connection id must come back after
+-- set_keepalive instead of a new TCP connection + auth per query.
+local function keepalive_tests()
+    local first = assert(db:query("SELECT CONNECTION_ID() AS id"))[1].id
+    local second = assert(db:query("SELECT CONNECTION_ID() AS id"))[1].id
+    tests.assertEquals(second, first, "connection must be reused from the pool")
+end
+
 local ping, ping_err = db:query("SELECT 1 AS ok")
 if not ping then error("MySQL integration: cannot reach the database: " .. tostring(ping_err)) end
 
@@ -170,6 +190,8 @@ local ok = tests.runSuite("MySQL integration", {
     c_unique = unique_tests,
     d_transactions = transaction_tests,
     e_eager_loading = eager_loading_tests,
+    f_values = value_tests,
+    g_keepalive = keepalive_tests,
 })
 cleanup()
 assert(ok)
