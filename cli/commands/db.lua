@@ -98,6 +98,65 @@ DbCommand.status = guarded(function(options)
     return true
 end)
 
+DbCommand.seed = guarded(function(options)
+    options = options or {}
+    cli_output.print_header("Database seeders")
+    local Seeder = require("crescent.database.seeder")
+    local seeder = Seeder.new(database(options), {
+        path = options.seeds_path,
+        log = function(_, name) print("-> seeding " .. name) end,
+    })
+    local result, err = seeder:run(options.name)
+    if not result then
+        cli_output.print_error(tostring(err))
+        return false
+    end
+    if #result.seeded == 0 then
+        cli_output.print_info("No seeders found in " .. (options.seeds_path or "seeds") .. "/")
+    else
+        print(string.format("%d seeder(s) applied", #result.seeded))
+    end
+    return true
+end)
+
+local SEEDER_TEMPLATE = [[
+-- Seeder %s. Runs inside a transaction; return false (or raise) to roll back.
+-- Seeders are not recorded: keep them idempotent if they may run again.
+return function(db)
+    -- local User = require("src.users.models.user")
+    -- if not User:where("email", "admin@example.com"):first(db) then
+    --     assert(User:create({ name = "Admin", email = "admin@example.com" }, db))
+    -- end
+end
+]]
+
+-- Writes seeds/<name>.lua. Returns the path or false.
+function DbCommand.make_seeder(name, options)
+    options = options or {}
+    if type(name) ~= "string" or not name:match("^[%a][%w_]*$") then
+        cli_output.print_error("seeder name must match ^[A-Za-z][A-Za-z0-9_]*$")
+        return false
+    end
+    local directory = options.path or "seeds"
+    local path = directory .. "/" .. name .. ".lua"
+    local existing = io.open(path, "r")
+    if existing then
+        existing:close()
+        cli_output.print_error("seeder already exists: " .. path)
+        return false
+    end
+    os.execute("mkdir -p '" .. directory:gsub("'", "'\\''") .. "'")
+    local file, err = io.open(path, "w")
+    if not file then
+        cli_output.print_error("unable to write " .. path .. ": " .. tostring(err))
+        return false
+    end
+    file:write(string.format(SEEDER_TEMPLATE, name))
+    file:close()
+    print("Created " .. path)
+    return path
+end
+
 local TEMPLATE = [[
 -- Migration %s
 -- up/down return a SQL string, a list of statements, or { sql = ..., bindings = { ... } }.
@@ -159,6 +218,12 @@ local COMMANDS = {
 function DbCommand.run(command, argument)
     if command == "make_migration" or command == "make:migration" then
         return DbCommand.make_migration(argument) ~= false
+    end
+    if command == "make_seeder" or command == "make:seeder" then
+        return DbCommand.make_seeder(argument) ~= false
+    end
+    if command == "seed" then
+        return DbCommand.seed({ name = argument })
     end
     local handler = COMMANDS[command]
     if not handler then

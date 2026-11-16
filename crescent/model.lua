@@ -196,6 +196,11 @@ function Model:count(adapter)
     return self:query(adapter):count()
 end
 
+-- Model:page(ctx.query.page, ctx.query.per_page) -> { data = models, meta = {...} }
+function Model:page(page, per_page, options, adapter)
+    return self:query(adapter):page(page, per_page, options)
+end
+
 -- Raw rows; use Model:hydrate_all() to turn them into instances.
 function Model:raw(sql, bindings, adapter)
     return QueryBuilder.raw(sql, bindings, adapter_for(class_of(self), adapter))

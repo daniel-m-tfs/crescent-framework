@@ -180,6 +180,32 @@ local function keepalive_tests()
     tests.assertEquals(second, first, "connection must be reused from the pool")
 end
 
+local function seeder_tests()
+    local Seeder = require("crescent.database.seeder")
+    local seeder = Seeder.new(db, { seeds = {
+        { name = "01_admin", run = function(tx)
+            assert(User:create({ name = "Seed Admin", email = "seed@example.com" }, tx))
+        end },
+        { name = "02_fails", run = function(tx)
+            assert(User:create({ name = "Seed Rollback", email = "rollback-seed@example.com" }, tx))
+            error("abort this seeder")
+        end },
+    } })
+    local result, err = seeder:run()
+    tests.assertNil(result)
+    tests.assertContains(err, "02_fails")
+    tests.assertNotNil(User:where("email", "seed@example.com"):first(), "first seeder committed")
+    tests.assertNil(User:where("email", "rollback-seed@example.com"):first(), "failed seeder rolled back")
+end
+
+local function page_tests()
+    local page = assert(User:page(1, 2))
+    tests.assertTrue(page.meta.total >= 1)
+    tests.assertTrue(#page.data <= 2)
+    tests.assertEquals(page.meta.per_page, 2)
+    tests.assertNotNil(page.data[1]:get("id"), "page data are hydrated models")
+end
+
 local ping, ping_err = db:query("SELECT 1 AS ok")
 if not ping then error("MySQL integration: cannot reach the database: " .. tostring(ping_err)) end
 
@@ -192,6 +218,8 @@ local ok = tests.runSuite("MySQL integration", {
     e_eager_loading = eager_loading_tests,
     f_values = value_tests,
     g_keepalive = keepalive_tests,
+    h_seeder = seeder_tests,
+    i_page = page_tests,
 })
 cleanup()
 assert(ok)

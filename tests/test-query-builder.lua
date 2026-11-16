@@ -159,7 +159,40 @@ local function execution_tests()
     tests.assertEquals(kind, "unique_violation")
 end
 
+local function page_tests()
+    local adapter = { calls = {} }
+    function adapter:query(sql, bindings)
+        self.calls[#self.calls + 1] = { sql = sql, bindings = bindings }
+        if sql:find("COUNT(*)", 1, true) then return { { aggregate = "23" } } end
+        return { { id = 11 }, { id = 12 }, { id = 13 } }
+    end
+    function adapter:execute() end
+
+    local query = QueryBuilder.table("users"):where("active", 1):order_by("id"):limit(5)
+    local result = assert(query:page("3", "10", adapter))
+    tests.assertEquals(#adapter.calls, 2)
+    tests.assertNotContains(adapter.calls[1].sql, "LIMIT")
+    tests.assertNotContains(adapter.calls[1].sql, "ORDER BY")
+    tests.assertContains(adapter.calls[2].sql, "LIMIT 10 OFFSET 20")
+    tests.assertEquals(#result.data, 3)
+    tests.assertTableEquals(result.meta, { page = 3, per_page = 10, total = 23, last_page = 3, from = 21, to = 23 })
+    tests.assertEquals(query.limit_value, 5, "page() must not change the builder")
+
+    adapter.calls = {}
+    local capped = assert(QueryBuilder.table("users"):page("x", 5000, adapter))
+    tests.assertEquals(capped.meta.page, 1, "invalid page falls back to 1")
+    tests.assertEquals(capped.meta.per_page, QueryBuilder.MAX_PER_PAGE)
+
+    local empty_adapter = { query = function(_, sql)
+        if sql:find("COUNT(*)", 1, true) then return { { aggregate = 0 } } end
+        return {}
+    end, execute = function() end }
+    local empty = assert(QueryBuilder.table("users"):page(1, 10, empty_adapter))
+    tests.assertTableEquals(empty.meta, { page = 1, per_page = 10, total = 0, last_page = 1 })
+end
+
 assert(tests.runSuite("Query builder", {
+    page = page_tests,
     select_compilation = select_tests,
     rejections = rejection_tests,
     write_compilation = write_tests,

@@ -259,6 +259,52 @@ function QueryBuilder:paginate(page, per_page)
     return self
 end
 
+QueryBuilder.MAX_PER_PAGE = 100
+
+-- Lenient parsing for values that usually come from the query string:
+-- anything that is not a positive integer falls back to the default.
+local function page_number(value, default)
+    value = tonumber(value)
+    if not value or value < 1 or value ~= math.floor(value) then return default end
+    return value
+end
+
+-- Runs a COUNT plus the page query and returns
+-- `{ data = rows_or_models, meta = { page, per_page, total, last_page, from, to } }`.
+-- `per_page` is capped at `options.max_per_page` (default MAX_PER_PAGE) so a
+-- client cannot request the whole table.
+function QueryBuilder:page(page, per_page, options, adapter)
+    if is_adapter(options) then options, adapter = nil, options end
+    options = options or {}
+    local max_per_page = options.max_per_page or QueryBuilder.MAX_PER_PAGE
+    page = page_number(page, 1)
+    per_page = math.min(page_number(per_page, options.default_per_page or 15), max_per_page)
+
+    local total, err, errno, sqlstate, kind = self:count(adapter)
+    if total == nil then return nil, err, errno, sqlstate, kind end
+    local last_page = math.max(1, math.ceil(total / per_page))
+
+    local previous_limit, previous_offset = self.limit_value, self.offset_value
+    self.limit_value, self.offset_value = per_page, (page - 1) * per_page
+    local data
+    data, err, errno, sqlstate, kind = self:get(adapter)
+    self.limit_value, self.offset_value = previous_limit, previous_offset
+    if not data then return nil, err, errno, sqlstate, kind end
+
+    local from = #data > 0 and (page - 1) * per_page + 1 or nil
+    return {
+        data = data,
+        meta = {
+            page = page,
+            per_page = per_page,
+            total = total,
+            last_page = last_page,
+            from = from,
+            to = from and from + #data - 1 or nil,
+        },
+    }
+end
+
 -- Conditions added implicitly (e.g. soft-delete scopes). Always ANDed with
 -- the user conditions and never counted as a WHERE for update/delete.
 function QueryBuilder:_scope_conditions()

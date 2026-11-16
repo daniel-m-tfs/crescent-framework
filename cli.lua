@@ -35,6 +35,8 @@ Database (MySQL)
   db:migrate     (alias: migrate)            Run pending migrations
   db:rollback    (alias: migrate:rollback)   Roll back the last migration
   db:status      (alias: migrate:status)     Show migration status
+  db:seed [name]                             Run seeders in seeds/ (or only <name>)
+  make:seeder <name>                         seeds/<name>.lua
 
 Tests
   test [filter]                 Run tests/ on OpenResty LuaJIT
@@ -110,6 +112,11 @@ local COMMANDS = {
     ["db:migrate"] = db("migrate"),
     ["db:rollback"] = db("rollback"),
     ["db:status"] = db("status"),
+    ["db:seed"] = function() return require("cli.commands.db").seed({ name = args[1] }) end,
+    ["make:seeder"] = function()
+        if not require_name(args[1], "make:seeder <name>") then return false end
+        return require("cli.commands.db").make_seeder(args[1]) ~= false
+    end,
 }
 COMMANDS.migrate = COMMANDS["db:migrate"]
 COMMANDS["migrate:rollback"] = COMMANDS["db:rollback"]
