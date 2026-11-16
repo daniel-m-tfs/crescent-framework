@@ -70,7 +70,8 @@ end
 
 local function default_sink(level, line)
     if ngx and ngx.log then
-        local ngx_level = ({ debug = ngx.DEBUG, info = ngx.INFO, warn = ngx.WARN, error = ngx.ERR })[level]
+        -- info maps to NOTICE: nginx's usual `error_log ... notice` would drop INFO.
+        local ngx_level = ({ debug = ngx.DEBUG, info = ngx.NOTICE, warn = ngx.WARN, error = ngx.ERR })[level]
         ngx.log(ngx_level, line)
     else
         io.stderr:write(line, "\n")

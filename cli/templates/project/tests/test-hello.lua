@@ -29,6 +29,7 @@ local function greets_by_name()
     tests.assertEquals(writer.status, 200)
     tests.assertEquals(json.decode(writer.body).message, "Hello, Ada!")
     tests.assertEquals(json.decode(get(app(), "/api/hello").body).message, "Hello, World!")
+    tests.assertEquals(json.decode(get(app(), "/api/hello", { name = "" }).body).message, "Hello, World!")
 end
 
 local function rejects_invalid_names()

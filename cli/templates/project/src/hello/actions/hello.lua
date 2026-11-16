@@ -10,7 +10,8 @@ end
 
 -- GET /api/hello?name=Ada — JSON; `name` is validated by app:validated (422 when invalid).
 function HelloActions.greet(ctx)
-    local name = ctx.query.name or "World"
+    local name = ctx.query.name
+    if name == nil or name == "" then name = "World" end
     return ctx:json(200, { message = "Hello, " .. name .. "!" })
 end
 

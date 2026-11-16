@@ -89,8 +89,11 @@ function Make.module(name)
     for _, file in ipairs(files) do
         if not write(file[1], Templates.render(file[2], vars)) then return false end
     end
-    cli_output.print_info("Register it in app.lua:")
+    local migration = Make.migration_file("create_" .. vars.plural .. "_table")
+    if not migration then return false end
+    cli_output.print_info("Register it in app.lua and create the table:")
     print(string.format('  require("src.%s").register(app)', vars.module))
+    print("  bin/crescent db:migrate      # " .. migration)
     return true
 end
 

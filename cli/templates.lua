@@ -188,17 +188,18 @@ local {{Name}}Action = {}
     name = { required = true, string = true, min_length = 1, max_length = 255 },
 }
 
--- Actions expect a crescent.database adapter on ctx.db (or app.db).
+-- Actions use the database configured at boot (ctx.db, from config.database).
 local function with_db(handler)
     return function(ctx)
-        local db = ctx.db or (ctx.app and ctx.app.db)
-        if not db then
+        if not ctx.db then
             return ctx:error(503, "database is not configured", nil, "database_unavailable")
         end
-        return handler(ctx, db)
+        return handler(ctx, ctx.db)
     end
 end
 
+-- Validation errors arrive as a table of field errors; anything else is a
+-- database failure (details only in debug).
 local function failure(ctx, message, err, identifier)
     if type(err) == "table" then
         return ctx:error(422, "validation failed", err, "validation_failed")
@@ -206,10 +207,11 @@ local function failure(ctx, message, err, identifier)
     return ctx:error(500, message, ctx.debug and err or nil, identifier)
 end
 
+-- GET /{{plural}}?page=1&per_page=15
 {{Name}}Action.index = with_db(function(ctx, db)
-    local records, err = {{Name}}Service.list(db)
-    if not records then return failure(ctx, "unable to list {{plural}}", err, "{{name}}_list_failed") end
-    return ctx:json(200, { data = json.array(records) })
+    local page, err = {{Name}}Service.page(db, ctx.query.page, ctx.query.per_page)
+    if not page then return failure(ctx, "unable to list {{plural}}", err, "{{name}}_list_failed") end
+    return ctx:json(200, { data = json.array(page.data), meta = page.meta })
 end)
 
 {{Name}}Action.show = with_db(function(ctx, db)
@@ -243,62 +245,52 @@ return {{Name}}Action
 ]]
 
 Templates.module_service = [[
-local QueryBuilder = require("crescent.database.query_builder")
 local {{Name}} = require("src.{{module}}.models.{{name}}")
 
--- Every function takes a crescent.database adapter as `db` and returns
--- `value` or `nil, err` (err is a table of field errors on validation failure).
+-- Business logic for {{plural}}. Every function takes the database adapter
+-- (`db`, or a transaction) and returns `value` or `nil, err`; `err` is a
+-- table of field errors when validation fails. Records are returned as plain
+-- tables (`to_table()` drops the model's hidden fields).
 local {{Name}}Service = {}
 
-local function query()
-    return QueryBuilder.new():table({{Name}}.table)
+local function present(record)
+    return record and record:to_table() or nil
 end
 
-local function present(row)
-    local result = {}
-    for key, value in pairs(row) do result[key] = value end
-    for _, key in ipairs({{Name}}.hidden or {}) do result[key] = nil end
-    return result
-end
-
-function {{Name}}Service.list(db)
-    local rows, err = query():order_by({{Name}}.primary_key):fetch(db)
-    if not rows then return nil, err end
-    local records = {}
-    for index, row in ipairs(rows) do records[index] = present(row) end
-    return records
+function {{Name}}Service.page(db, page, per_page)
+    local result, err = {{Name}}:page(page, per_page, nil, db)
+    if not result then return nil, err end
+    local data = {}
+    for index, record in ipairs(result.data) do data[index] = present(record) end
+    return { data = data, meta = result.meta }
 end
 
 -- Returns the record, `nil` when it does not exist, or `nil, err`.
 function {{Name}}Service.find(db, id)
-    local rows, err = query():where({{Name}}.primary_key, id):limit(1):fetch(db)
-    if not rows then return nil, err end
-    return rows[1] and present(rows[1]) or nil
+    local record, err = {{Name}}:find(id, db)
+    if not record then return nil, err end
+    return present(record)
 end
 
 function {{Name}}Service.create(db, attributes)
-    local record = {{Name}}:new(attributes)
-    local saved, err = record:save(db)
-    if not saved then return nil, err end
-    return present(record.attributes)
+    local record, err = {{Name}}:create(attributes, db)
+    if not record then return nil, err end
+    return present(record)
 end
 
 function {{Name}}Service.update(db, id, attributes)
-    local current, err = {{Name}}Service.find(db, id)
-    if not current then return nil, err end
-    local record = {{Name}}:new()
-    for key, value in pairs(current) do record.attributes[key] = value end
-    record:fill(attributes)
-    record.exists = true
-    local saved, save_error = record:save(db)
+    local record, err = {{Name}}:find(id, db)
+    if not record then return nil, err end
+    local saved, save_error = record:update(attributes, db)
     if not saved then return nil, save_error end
-    return present(record.attributes)
+    return present(record)
 end
 
+-- Returns true, `nil` when it does not exist, or `nil, err`.
 function {{Name}}Service.delete(db, id)
-    local current, err = {{Name}}Service.find(db, id)
-    if not current then return nil, err end
-    local deleted, delete_error = query():where({{Name}}.primary_key, id):delete(db)
+    local record, err = {{Name}}:find(id, db)
+    if not record then return nil, err end
+    local deleted, delete_error = record:delete(db)
     if not deleted then return nil, delete_error end
     return true
 end
