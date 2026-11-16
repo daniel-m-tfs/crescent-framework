@@ -54,6 +54,7 @@ Em produção use `conf/nginx.production.conf` (revise antes):
 |---|---|
 | Banco, Query Builder, ORM, migrations | [docs/database.md](docs/database.md) |
 | JWT, senhas, auth, CORS, headers, rate limit | [docs/security.md](docs/security.md) |
+| Cookies, sessões, CSRF, uploads multipart | [docs/web.md](docs/web.md) |
 | CLI (`new`, `make:*`, `server`, `routes`, `db:*`) | [docs/cli.md](docs/cli.md) |
 | HTTP client e e-mail | [docs/integrations.md](docs/integrations.md) |
 

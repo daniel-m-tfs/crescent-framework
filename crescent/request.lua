@@ -2,6 +2,7 @@
 -- Everything ngx-specific about reading a request lives here, so the rest of
 -- the framework can be exercised with plain tables.
 local json = require("crescent.json")
+local Upload = require("crescent.upload")
 
 local Request = {}
 
@@ -77,7 +78,8 @@ function Request.decode_body(request, body)
     return request
 end
 
-function Request.from_ngx(ngx_api)
+-- `config` (the application config) carries the upload settings.
+function Request.from_ngx(ngx_api, config)
     local headers = {}
     local raw_headers = ngx_api.req.get_headers(MAX_HEADERS)
     for key, value in pairs(raw_headers) do headers[string.lower(key)] = value end
@@ -90,13 +92,30 @@ function Request.from_ngx(ngx_api)
         upstream_request_id = headers["x-request-id"],
         request_id = ngx_api.var.request_id,
     }
+    -- resty.upload streams the body from the socket itself, so read_body /
+    -- get_body_data must not run first.
+    local content_type = headers["content-type"]
+    if type(content_type) == "table" then content_type = content_type[1] end
+    if Upload.is_multipart(content_type) then
+        return Upload.read_request(ngx_api, request, config)
+    end
     local body, read_error = read_body(ngx_api)
     if read_error then
         request.body_error = "unable to read request body"
         request.body_error_code = "body_unreadable"
         return request
     end
-    return Request.decode_body(request, body)
+    -- Deletes temporary upload files the action did not keep.
+function Request.cleanup(request)
+    if request and request.files then Upload.cleanup(request.files) end
+end
+
+return Request.decode_body(request, body)
+end
+
+-- Deletes temporary upload files the action did not keep.
+function Request.cleanup(request)
+    if request and request.files then Upload.cleanup(request.files) end
 end
 
 return Request

@@ -40,7 +40,7 @@ end
 
 local function run_file(path)
     local command = shell_quote(resty_bin())
-        .. " -I lua_modules/share/lua/5.1 --shdict 'crescent_limits 1m' --shdict 'crescent_jwt 1m' "
+        .. " -I lua_modules/share/lua/5.1 --shdict 'crescent_limits 1m' --shdict 'crescent_jwt 1m' --shdict 'crescent_sessions 1m' "
         .. shell_quote(path) .. " 2>&1; printf '\n__CRESCENT_EXIT__:%s\n' $?"
     local handle = io.popen(command)
     if not handle then return false, "unable to start lua" end

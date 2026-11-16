@@ -67,10 +67,10 @@ local function origin_matcher(origins)
 end
 
 local function add_vary(ctx, value)
-    local headers = ctx.res.writer.headers
-    local current = headers.Vary
+    local current = ctx.res:get_header("Vary")
+    if type(current) == "table" then current = table.concat(current, ", ") end
     if current and current ~= "" then
-        for item in current:gmatch("[^,]+") do
+        for item in tostring(current):gmatch("[^,]+") do
             if trim(item):lower() == value:lower() then return end
         end
         value = current .. ", " .. value
