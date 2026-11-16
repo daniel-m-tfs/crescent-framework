@@ -1,0 +1,12 @@
+.git
+.claude
+.env
+.env.*
+!.env.example
+lua_modules
+logs/*
+!logs/.gitkeep
+tmp/*
+!tmp/.gitkeep
+*.log
+.DS_Store

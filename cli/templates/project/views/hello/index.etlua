@@ -1,0 +1,9 @@
+<h1>🌙 Hello, World!</h1>
+<p>Seu projeto <strong><%= title %></strong> está rodando com Crescent sobre OpenResty
+  (ambiente: <code><%= environment %></code>).</p>
+<ul>
+  <li><a href="/api/hello?name=Crescent">/api/hello?name=Crescent</a> — exemplo de JSON com validação</li>
+  <li><a href="/health">/health</a> — liveness</li>
+  <li><a href="/ready">/ready</a> — readiness (verifica o banco)</li>
+</ul>
+<p>Comece por <code>src/hello/</code> ou gere um módulo: <code>bin/crescent make:module Product</code>.</p>

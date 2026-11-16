@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
+# Unit tests run on OpenResty's LuaJIT (bin/crescent uses `resty`). Inside the
+# container: docker compose exec app bin/crescent test
 set -eu
 
 cd "$(dirname "$0")"
 
-lua cli.lua test "$@"
+./bin/crescent test "$@"
 
-if [ -x "${OPENRESTY_BIN:-/opt/homebrew/opt/openresty/bin/openresty}" ] && [ $# -eq 0 ]; then
-	lua cli.lua test:http
+if [ -x "${OPENRESTY_BIN:-/opt/homebrew/opt/openresty/bin/openresty}" ] && [ $# -eq 0 ] && [ -f tests/test-http.sh ]; then
+	./bin/crescent test:http
 fi

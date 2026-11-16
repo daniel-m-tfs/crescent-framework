@@ -1,0 +1,6 @@
+:root { color-scheme: light dark; --accent: #6c5ce7; }
+body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; line-height: 1.6; }
+.container { max-width: 44rem; margin: 4rem auto; padding: 0 1rem; }
+h1 { font-size: 2.25rem; margin-bottom: .5rem; }
+a { color: var(--accent); }
+code { background: rgba(127, 127, 127, .15); padding: .1rem .35rem; border-radius: .25rem; }

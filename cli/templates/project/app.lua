@@ -5,6 +5,12 @@ local Config = require("crescent.config")
 
 local app = Crescent.new(Config.load())
 
+app:use(Crescent.middleware.security_headers.create())
+app:use(Crescent.middleware.request_log.create({
+    skip = function(ctx) return ctx.path == "/health" or ctx.path == "/ready" end,
+}))
+
 require("src.health").register(app)
+require("src.hello").register(app)
 
 return app

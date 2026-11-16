@@ -31,8 +31,11 @@ local function new_scaffolds_project()
         for _, relative in ipairs({
             "app.lua", "nginx.conf", "conf/nginx.production.conf", "config/development.lua",
             "config/production.lua", "config/test.lua", ".env.example", ".gitignore", "deps.sh",
-            "src/health/init.lua", "src/health/actions/health.lua", "src/health/routes/health.lua",
-            "tests/test-health.lua", "crescent/application.lua", "crescent/utils/tests.lua",
+            "src/health/init.lua", "src/hello/init.lua", "src/hello/actions/hello.lua",
+            "views/layout.etlua", "views/hello/index.etlua", "public/css/app.css",
+            "migrations/.gitkeep", "seeds/.gitkeep", "tests/test-health.lua", "tests/test-hello.lua",
+            "Dockerfile", "docker-compose.yml", ".dockerignore", "docker/entrypoint.sh",
+            "docker/mysql-init/01-test-database.sh", "conf/nginx.docker.conf", "conf/nginx.docker-dev.conf", "crescent/application.lua", "crescent/utils/tests.lua",
             "cli/commands/make.lua", "cli/templates/project/app.lua", "cli.lua", "bin/crescent",
             "logs/.gitkeep", "tmp/.gitkeep",
         }) do
@@ -48,7 +51,8 @@ local function new_scaffolds_project()
             end
         end
         tests.assertContains(fs.read(fs.join(root, "config/development.lua")), '"my_app_dev"')
-        tests.assertContains(fs.read(fs.join(root, "src/health/actions/health.lua")), '"my-app"')
+        tests.assertContains(fs.read(fs.join(root, "src/health/init.lua")), '"my-app"')
+        tests.assertTrue(fs.execute("test -x " .. fs.shell_quote(fs.join(root, "docker/entrypoint.sh"))))
         tests.assertTrue(fs.execute("test -x " .. fs.shell_quote(fs.join(root, "bin/crescent"))))
         tests.assertTrue(fs.execute("test -x " .. fs.shell_quote(fs.join(root, "deps.sh"))))
 

@@ -1,14 +1,22 @@
 -- `new <name>`: scaffolds a project from cli/templates/project plus a copy of
--- the framework (crescent/, cli/, cli.lua, bin/crescent). No network access.
+-- the framework and its runtime files (crescent/, cli/, cli.lua, bin/crescent,
+-- nginx/Docker configuration, deps.sh). Runtime files are copied from the
+-- framework root — never duplicated in the templates — so new projects always
+-- get the current configuration. No network access.
 local cli_output = require("crescent.utils.cli_output")
 local fs = require("cli.fs")
 local Templates = require("cli.templates")
 
 local New = {}
 
-local FRAMEWORK_DIRS = { "crescent", "cli" }
-local FRAMEWORK_FILES = { "cli.lua", "bin/crescent" }
-local EXECUTABLES = { "bin/crescent", "deps.sh", "test.sh" }
+local FRAMEWORK_DIRS = { "crescent", "cli", "conf", "docker" }
+local FRAMEWORK_FILES = {
+    "cli.lua", "bin/crescent", "nginx.conf", "deps.sh",
+    "Dockerfile", "docker-compose.yml", ".dockerignore",
+}
+local EXECUTABLES = {
+    "bin/crescent", "deps.sh", "test.sh", "docker/entrypoint.sh", "docker/mysql-init/01-test-database.sh",
+}
 
 -- Template files named `dot-x` become `.x`, so the template tree never
 -- carries a live .gitignore/.env into this repository.
@@ -80,10 +88,10 @@ function New.run(name, options)
     print("Project created in " .. target)
     cli_output.print_info("Next steps:")
     print("  cd " .. name)
-    print("  ./deps.sh                 # lua-resty-http, lua-resty-mail, etlua")
     print("  cp .env.example .env")
-    print("  ./bin/crescent server start")
-    print("  curl http://127.0.0.1:8080/health")
+    print("  docker compose up --build    # app + MySQL on http://127.0.0.1:8080")
+    print("or without Docker (OpenResty installed locally):")
+    print("  ./deps.sh && ./bin/crescent server start")
     return true
 end
 

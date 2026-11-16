@@ -1,5 +1,8 @@
 APP_ENV=development
 APP_DEBUG=true
+# Secret for signed cookies/sessions (32+ bytes): openssl rand -base64 48
+APP_KEY=
+APP_PORT=8080
 
 # MySQL (lua-resty-mysql). Every variable used at runtime must also be listed
 # with an `env NAME;` directive in nginx.conf.
@@ -8,8 +11,14 @@ DB_PORT=3306
 DB_NAME={{db_name}}_dev
 DB_TEST_NAME={{db_name}}_test
 DB_USER=crescent
-DB_PASSWORD=
+# Development defaults used by docker-compose.yml — change them for any
+# shared or production environment.
+DB_PASSWORD=crescent_dev_password
+DB_ROOT_PASSWORD=crescent_root_dev_password
+# Host port for MySQL from docker compose (127.0.0.1 only).
+DB_FORWARD_PORT=3307
 
+# 32+ bytes when using crescent.middleware.auth.jwt: openssl rand -base64 48
 JWT_SECRET=
 
 # SMTP (crescent.mail). Also list these with `env NAME;` in nginx.conf.
