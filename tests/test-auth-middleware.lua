@@ -211,6 +211,8 @@ local suite = {
 
     jwt_requires_secret = function()
         tests.assertError(function() auth.jwt({ secret = "" }) end, "JWT secret is required")
+        tests.assertError(function() auth.jwt({ secret = "short-secret" }) end, "at least 32 bytes")
+        tests.assertNoError(function() auth.jwt({ secret = "short-secret", allow_weak_secret = true }) end)
         if not require("crescent.env").get("JWT_SECRET") then
             tests.assertError(function() auth.jwt() end, "JWT secret is required")
             tests.assertError(function() auth.generate_token_pair(1) end, "JWT secret is required")
@@ -296,7 +298,7 @@ local suite = {
         local ok, decoded = auth.verify_token(token, { secret = SECRET })
         tests.assertTrue(ok)
         tests.assertEquals(decoded.user_id, 1)
-        tests.assertFalse(auth.verify_token(token, { secret = "wrong_secret" }))
+        tests.assertFalse(auth.verify_token(token, { secret = "wrong_secret_wrong_secret_wrong_secret" }))
         local header, payload = auth.decode_token(token)
         tests.assertEquals(header.alg, "HS256")
         tests.assertEquals(payload.username, "testuser")

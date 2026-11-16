@@ -81,7 +81,8 @@ para que contadores de rate limit não disputem memória com revogações.
 local auth = require("crescent.middleware.auth")
 
 -- global
-app:use(auth.jwt())  -- secret padrão: JWT_SECRET (erro na construção se ausente)
+app:use(auth.jwt())  -- secret padrão: JWT_SECRET (erro na construção se ausente
+                     -- ou com menos de 32 bytes; gere com `openssl rand -base64 48`)
 
 -- por rota
 app:get("/me", auth.protect(auth.jwt(), function(ctx)

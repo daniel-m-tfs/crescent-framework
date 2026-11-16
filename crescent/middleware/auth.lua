@@ -106,10 +106,19 @@ function Auth.api_key(header_name, validator, options)
     end
 end
 
+-- HS256 keys shorter than the hash output (32 bytes) are brute-forceable
+-- offline from any issued token (RFC 7518 §3.2).
+Auth.MIN_SECRET_LENGTH = 32
+
 local function resolve_secret(options)
     local secret = options.secret or Env.get("JWT_SECRET")
     if type(secret) ~= "string" or secret == "" then
         error("JWT secret is required: set JWT_SECRET or pass { secret = ... }", 3)
+    end
+    if #secret < Auth.MIN_SECRET_LENGTH and not options.allow_weak_secret then
+        error(string.format(
+            "JWT secret must be at least %d bytes (got %d); generate one with: openssl rand -base64 48",
+            Auth.MIN_SECRET_LENGTH, #secret), 3)
     end
     return secret
 end
