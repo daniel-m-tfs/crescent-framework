@@ -68,7 +68,10 @@ end
 
 -- New id (shared store) / new ciphertext, same data. Call it after login and
 -- privilege changes to prevent session fixation.
+-- Also drops the CSRF secret (crescent.middleware.csrf), so a token learned
+-- before login is useless afterwards.
 function Session:regenerate()
+    if type(self.data) == "table" then self.data._csrf_token = nil end
     self.regenerated = true
     self.changed = true
     return self

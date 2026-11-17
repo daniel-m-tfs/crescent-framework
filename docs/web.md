@@ -7,7 +7,7 @@ Módulos:
 | `crescent.response` | `header`, `append_header`, `get_header`, `before_flush` |
 | `crescent.cookie` | parse/serialização de cookies, cookies assinados |
 | `crescent.session` / `crescent.middleware.session` | sessões em cookie criptografado ou `ngx.shared` |
-| `crescent.middleware.csrf` | token sincronizador guardado na sessão |
+| `crescent.middleware.csrf` | token sincronizador guardado na sessão, mascarado por requisição (BREACH) |
 | `crescent.upload` | `multipart/form-data` em streaming (`resty.upload`) |
 
 ## Chave secreta
@@ -182,10 +182,18 @@ app:use(csrf.create({
 
 - Requer o middleware de sessão **antes** dele; sem sessão, a requisição falha
   com 500 e a mensagem `CSRF protection requires the session middleware`.
-- O token (256 bits) é criado na primeira chamada de `ctx:csrf_token()` e fica
-  na sessão. Métodos não seguros precisam enviá-lo no campo `_csrf` (form
+- Um segredo de 256 bits é criado na primeira chamada de `ctx:csrf_token()` e
+  fica na sessão; ele **nunca** aparece numa resposta. `ctx:csrf_token()`
+  devolve o segredo mascarado: `base64url(máscara ‖ máscara XOR segredo)`, com
+  máscara aleatória nova a cada requisição (86 caracteres). Assim páginas
+  comprimidas (gzip/brotli sobre TLS) não repetem os bytes do segredo e o
+  ataque BREACH não consegue extraí-lo. Qualquer token mascarado do segredo
+  atual é aceito, então várias abas e formulários antigos continuam válidos.
+- Métodos não seguros precisam enviar o token no campo `_csrf` (form
   urlencoded ou multipart) ou no header `X-CSRF-Token`; a comparação é em tempo
   constante. Falha → 403 `csrf_invalid`.
+- `session:regenerate()` (chame no login) descarta o segredo: tokens obtidos
+  antes do login deixam de valer.
 - `skip(ctx)` dispensa a verificação (ex.: APIs JSON autenticadas por bearer
   token, que não dependem de cookies do navegador).
 

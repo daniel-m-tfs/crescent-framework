@@ -377,7 +377,9 @@ return auth.generate_token_pair(user)   -- { access_token, refresh_token, token_
   `ctx.session:get/set/delete/flash/get_flash/regenerate/destroy`. Call
   `regenerate()` after login.
 - CSRF (after session): `app:use(require("crescent.middleware.csrf").create({ skip = fn }))`;
-  forms use `<%- csrf_field() %>`, AJAX sends `X-CSRF-Token`.
+  forms use `<%- csrf_field() %>`, AJAX sends `X-CSRF-Token`. Tokens are
+  masked per request (BREACH-safe), so `csrf_token()` changes on every page;
+  never compare tokens yourself. `session:regenerate()` rotates the secret.
 - Cookies are `HttpOnly`, `SameSite=Lax`, `Secure` outside debug. Signed
   cookies/sessions/CSRF use `APP_KEY` (32+ chars).
 - Uploads: validate `content_type`/size yourself; save with `ctx:save_upload`
