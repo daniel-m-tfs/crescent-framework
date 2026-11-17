@@ -109,16 +109,29 @@ function tests.assertNoError(fn, message)
     if not ok then fail(message or tostring(err), 2) end
 end
 
+local cli_output = require("crescent.utils.cli_output")
+local colors = cli_output.colors
+
+-- Error message without the traceback.
+local function describe(err)
+    local text = tostring(err)
+    return (text:gsub("\nstack traceback:.*$", ""))
+end
+
 function tests.run(name, test_function)
     local ok, err = pcall(test_function)
     if ok then
-        print(string.format("PASS %s", name))
+        print("    " .. colors.green .. "✓" .. colors.reset .. " " .. name)
         return true
     end
-    print(string.format("FAIL %s: %s", name, tostring(err)))
+    print("    " .. colors.red .. "✗ " .. name .. colors.reset)
+    for line in (describe(err) .. "\n"):gmatch("([^\n]*)\n") do
+        print("        " .. colors.red .. line .. colors.reset)
+    end
     return false
 end
 
+-- The "Result: X/Y passed, Z failed" line is parsed by `crescent test`.
 function tests.runSuite(suite_name, suite)
     local names = {}
     for name, test_function in pairs(suite) do
@@ -126,14 +139,15 @@ function tests.runSuite(suite_name, suite)
     end
     table.sort(names)
 
-    print(string.format("Suite: %s", suite_name))
+    print("  " .. colors.bold .. suite_name .. colors.reset)
     local passed = 0
     for _, name in ipairs(names) do
         if tests.run(name, suite[name]) then passed = passed + 1 end
     end
 
     local failed = #names - passed
-    print(string.format("Result: %d/%d passed, %d failed", passed, #names, failed))
+    local color = failed == 0 and colors.green or colors.red
+    print(string.format("  %sResult: %d/%d passed, %d failed%s", color, passed, #names, failed, colors.reset))
     return failed == 0
 end
 

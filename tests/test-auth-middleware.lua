@@ -136,6 +136,16 @@ local suite = {
         tests.assertContains(writer.body, '"name":"svc"')
     end,
 
+    rejected_validator_tables_do_not_leak = function()
+        local app = app_with(auth.api_key(function() return false, { secret_row = "internal" } end))
+        local writer = request(app, "/me", { ["x-api-key"] = "k" })
+        tests.assertEquals(writer.status, 401)
+        tests.assertNotContains(writer.body, "secret_row")
+        tests.assertContains(writer.body, "invalid api key")
+        local custom = app_with(auth.bearer(function() return false, "token revoked" end))
+        tests.assertContains(request(custom, "/me", bearer("t")).body, "token revoked")
+    end,
+
     -- JWT ---------------------------------------------------------------
     jwt_sets_user_and_payload = function()
         local app = app_with(auth.jwt({ secret = SECRET }))

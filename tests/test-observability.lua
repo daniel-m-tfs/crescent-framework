@@ -96,6 +96,29 @@ local function request_log_middleware()
     tests.assertEquals(lines[3].level, "warn", "4xx is logged as warn")
 end
 
+-- The logged status is the one sent after finalize, not a default 200.
+local function request_log_logs_final_status()
+    local lines, sink = capture()
+    local app = Crescent.new({ logger = function() end })
+    app:use(Crescent.middleware.request_log.create({ logger = Logger.new({ sink = sink }) }))
+    app:get("/table", function() return { ok = true } end)
+    app:get("/empty", function() end)
+    app:get("/boom", function() error("kaput") end)
+    local function get(path)
+        local writer = { headers = {} }
+        app:handle({ method = "GET", path = path, headers = {}, query = {} }, writer)
+        return writer
+    end
+    tests.assertEquals(get("/table").status, 200)
+    tests.assertEquals(get("/empty").status, 500)
+    tests.assertEquals(get("/boom").status, 500)
+    tests.assertEquals(#lines, 3)
+    tests.assertEquals(lines[1].entry.status, 200)
+    tests.assertEquals(lines[2].entry.status, 500)
+    tests.assertEquals(lines[2].level, "error")
+    tests.assertEquals(lines[3].entry.status, 500)
+end
+
 local function health_and_readiness()
     local healthy_db = { query = function() return { { ok = 1 } } end, execute = function() end,
         transaction = function() end, connect = function() end, close = function() end }
@@ -133,5 +156,6 @@ assert(tests.runSuite("Observability", {
     levels_and_json_lines = levels_and_json_lines,
     application_uses_structured_logger = application_uses_structured_logger,
     request_log_middleware = request_log_middleware,
+    request_log_logs_final_status = request_log_logs_final_status,
     health_and_readiness = health_and_readiness,
 }))

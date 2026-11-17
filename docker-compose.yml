@@ -14,11 +14,12 @@ services:
       - "${APP_PORT:-8080}:8080"
     volumes:
       # Source is mounted for live reload; dependencies, logs and temp files
-      # stay in the container.
+      # stay in the container; uploads persist in the app-storage volume.
       - .:/app
       - /app/lua_modules
       - /app/logs
       - /app/tmp
+      - app-storage:/app/storage
     depends_on:
       mysql:
         condition: service_healthy
@@ -45,4 +46,5 @@ services:
     restart: unless-stopped
 
 volumes:
+  app-storage:
   mysql-data:

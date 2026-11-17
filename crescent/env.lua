@@ -27,9 +27,21 @@ function Env.parse(text)
     return values
 end
 
+local function readable(path)
+    local file = io.open(path, "r")
+    if file then file:close() return true end
+    return false
+end
+
+-- Under nginx the prefix (-p) is the project root. The `resty` CLI runs with
+-- a temporary prefix, so the CLI falls back to the working directory, which
+-- bin/crescent sets to the project root.
 local function default_path()
     local prefix = ngx and ngx.config and ngx.config.prefix and ngx.config.prefix()
-    if prefix and prefix ~= "" then return prefix:gsub("/$", "") .. "/.env" end
+    if prefix and prefix ~= "" then
+        local path = prefix:gsub("/$", "") .. "/.env"
+        if readable(path) then return path end
+    end
     return ".env"
 end
 

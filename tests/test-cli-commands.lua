@@ -31,13 +31,13 @@ local function new_scaffolds_project()
         for _, relative in ipairs({
             "app.lua", "nginx.conf", "conf/nginx.production.conf", "config/development.lua",
             "config/production.lua", "config/test.lua", ".env.example", ".gitignore", "deps.sh",
-            "src/health/init.lua", "src/hello/init.lua", "src/hello/actions/hello.lua",
+            "src/health/init.lua", "src/hello/init.lua", "src/hello/controllers/hello.lua",
             "views/layout.etlua", "views/hello/index.etlua", "public/css/app.css",
             "migrations/.gitkeep", "seeds/.gitkeep", "tests/test-health.lua", "tests/test-hello.lua",
             "Dockerfile", "docker-compose.yml", ".dockerignore", "docker/entrypoint.sh",
             "docker/mysql-init/01-test-database.sh", "conf/nginx.docker.conf", "conf/nginx.docker-dev.conf", "crescent/application.lua", "crescent/utils/tests.lua",
             "cli/commands/make.lua", "cli/templates/project/app.lua", "cli.lua", "bin/crescent",
-            "logs/.gitkeep", "tmp/.gitkeep",
+            "logs/.gitkeep", "tmp/.gitkeep", "storage/.gitkeep", "tests/test-http.sh", ".env", "llm.md",
         }) do
             tests.assertTrue(fs.exists(fs.join(root, relative)), "missing " .. relative)
         end
@@ -52,9 +52,17 @@ local function new_scaffolds_project()
         end
         tests.assertContains(fs.read(fs.join(root, "config/development.lua")), '"my_app_dev"')
         tests.assertContains(fs.read(fs.join(root, "src/health/init.lua")), '"my-app"')
+        tests.assertContains(fs.read(fs.join(root, "llm.md")), "# my-app — guide for AI models")
         tests.assertTrue(fs.execute("test -x " .. fs.shell_quote(fs.join(root, "docker/entrypoint.sh"))))
         tests.assertTrue(fs.execute("test -x " .. fs.shell_quote(fs.join(root, "bin/crescent"))))
         tests.assertTrue(fs.execute("test -x " .. fs.shell_quote(fs.join(root, "deps.sh"))))
+        tests.assertTrue(fs.execute("test -x " .. fs.shell_quote(fs.join(root, "tests/test-http.sh"))))
+        local env = fs.read(fs.join(root, ".env"))
+        local app_key, jwt_secret = env:match("\nAPP_KEY=(%x+)\n"), env:match("\nJWT_SECRET=(%x+)\n")
+        tests.assertEquals(#(app_key or ""), 96, ".env gets a random APP_KEY")
+        tests.assertEquals(#(jwt_secret or ""), 96, ".env gets a random JWT_SECRET")
+        tests.assertNotEquals(app_key, jwt_secret)
+        tests.assertContains(fs.read(fs.join(root, ".env.example")), "\nAPP_KEY=\n", ".env.example keeps secrets empty")
 
         tests.assertFalse(quietly(New.run, "my-app", { source = ".", parent = parent }), "existing directory")
         for _, name in ipairs({ "../x", "a;rm -rf", "$(x)", "a b", "", "x/y" }) do

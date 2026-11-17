@@ -56,21 +56,24 @@ function Templates.render(template, vars)
     end))
 end
 
-Templates.action = [[
-local {{Name}}Action = {}
+Templates.controller = [[
+-- Controllers receive `ctx`, call services and answer with ctx:json,
+-- ctx:text, ctx:view or ctx:error.
+local {{Name}}Controller = {}
 
-function {{Name}}Action.index(ctx)
+function {{Name}}Controller.index(ctx)
     return ctx:json(200, { data = {} })
 end
 
-function {{Name}}Action.show(ctx)
+function {{Name}}Controller.show(ctx)
     return ctx:json(200, { data = { id = ctx.params.id } })
 end
 
-return {{Name}}Action
+return {{Name}}Controller
 ]]
 
 Templates.service = [[
+-- Business logic for {{name}}; keep it free of ctx so it is easy to test.
 local {{Name}}Service = {}
 
 function {{Name}}Service.example(value)
@@ -95,11 +98,11 @@ return Model:extend({
 ]]
 
 Templates.routes = [[
-local action = require("src.{{module}}.actions.{{name}}")
+local controller = require("src.{{module}}.controllers.{{name}}")
 
 return function(app, prefix)
-    app:get(prefix, action.index)
-    app:get(prefix .. "/{id}", action.show)
+    app:get(prefix, controller.index, "{{plural}}.index")
+    app:get(prefix .. "/{id}", controller.show, "{{plural}}.show")
 end
 ]]
 
@@ -122,8 +125,12 @@ end
 assert(tests.runSuite("{{Name}}", { example = example }))
 ]]
 
+-- `create_<table>[_table]` gets a CREATE TABLE; every other name gets an
+-- ALTER TABLE skeleton for the table guessed by migration_table().
 Templates.migration = [[
 -- Migration: {{migration}}
+-- up/down return a SQL string, a list of statements, or { sql = ..., bindings = { ... } }.
+-- MySQL DDL commits implicitly: keep one schema change per migration when possible.
 return {
     up = function()
         return [=[
@@ -142,15 +149,40 @@ CREATE TABLE IF NOT EXISTS `{{table}}` (
 }
 ]]
 
+Templates.migration_alter = [[
+-- Migration: {{migration}}
+-- up/down return a SQL string, a list of statements, or { sql = ..., bindings = { ... } }.
+-- MySQL DDL commits implicitly: keep one schema change per migration when possible.
+return {
+    up = function()
+        return "ALTER TABLE `{{table}}` ADD COLUMN `example` VARCHAR(255) NULL"
+    end,
+
+    down = function()
+        return "ALTER TABLE `{{table}}` DROP COLUMN `example`"
+    end,
+}
+]]
+
 -- Guesses the table from create_<t>_table / drop_<t>_table / ..._to_<t>.
 function Templates.migration_table(name)
     local snake = name:gsub("%-", "_")
     return snake:match("^create_(.+)_table$")
+        or snake:match("^create_(.+)$")
         or snake:match("^drop_(.+)_table$")
         or snake:match("^update_(.+)_table$")
+        or snake:match("^alter_(.+)_table$")
         or snake:match("_to_(.+)$")
         or snake:match("_from_(.+)$")
+        or snake:match("_in_(.+)$")
         or "example"
+end
+
+-- Renders the migration file for `name` (without the timestamp prefix).
+function Templates.migration_for(name)
+    local snake = name:gsub("%-", "_")
+    local template = snake:match("^create_.+") and Templates.migration or Templates.migration_alter
+    return Templates.render(template, { migration = name, table = Templates.migration_table(name) })
 end
 
 -- CRUD module (make:module) -------------------------------------------------
@@ -159,36 +191,36 @@ Templates.module_init = [[
 local Module = {}
 
 function Module.register(app)
-    local routes = require("src.{{module}}.routes.{{name}}")
-    routes(app, "/{{plural}}")
+    require("src.{{module}}.routes.{{name}}")(app, "/{{plural}}")
 end
 
 return Module
 ]]
 
 Templates.module_routes = [[
-local action = require("src.{{module}}.actions.{{name}}")
+local controller = require("src.{{module}}.controllers.{{name}}")
 
+-- Route names ({{plural}}.index, ...) work with app:route(name) and `crescent routes`.
 return function(app, prefix)
-    app:get(prefix, action.index, "{{plural}}.index")
-    app:get(prefix .. "/{id}", action.show, "{{plural}}.show")
-    app:post(prefix, app:validated(action.schema, action.store), "{{plural}}.store")
-    app:put(prefix .. "/{id}", app:validated(action.schema, action.update), "{{plural}}.update")
-    app:delete(prefix .. "/{id}", action.destroy, "{{plural}}.destroy")
+    app:get(prefix, controller.index, "{{plural}}.index")
+    app:get(prefix .. "/{id}", controller.show, "{{plural}}.show")
+    app:post(prefix, app:validated(controller.schema, controller.store), "{{plural}}.store")
+    app:put(prefix .. "/{id}", app:validated(controller.schema, controller.update), "{{plural}}.update")
+    app:delete(prefix .. "/{id}", controller.destroy, "{{plural}}.destroy")
 end
 ]]
 
-Templates.module_action = [[
+Templates.module_controller = [[
 local json = require("crescent.json")
 local {{Name}}Service = require("src.{{module}}.services.{{name}}")
 
-local {{Name}}Action = {}
+local {{Name}}Controller = {}
 
-{{Name}}Action.schema = {
+{{Name}}Controller.schema = {
     name = { required = true, string = true, min_length = 1, max_length = 255 },
 }
 
--- Actions use the database configured at boot (ctx.db, from config.database).
+-- Handlers use the database configured at boot (ctx.db, from config.database).
 local function with_db(handler)
     return function(ctx)
         if not ctx.db then
@@ -208,40 +240,40 @@ local function failure(ctx, message, err, identifier)
 end
 
 -- GET /{{plural}}?page=1&per_page=15
-{{Name}}Action.index = with_db(function(ctx, db)
+{{Name}}Controller.index = with_db(function(ctx, db)
     local page, err = {{Name}}Service.page(db, ctx.query.page, ctx.query.per_page)
     if not page then return failure(ctx, "unable to list {{plural}}", err, "{{name}}_list_failed") end
     return ctx:json(200, { data = json.array(page.data), meta = page.meta })
 end)
 
-{{Name}}Action.show = with_db(function(ctx, db)
+{{Name}}Controller.show = with_db(function(ctx, db)
     local record, err = {{Name}}Service.find(db, ctx.params.id)
     if err then return failure(ctx, "unable to load {{name}}", err, "{{name}}_load_failed") end
     if not record then return ctx:error(404, "{{name}} not found", nil, "{{name}}_not_found") end
     return ctx:json(200, { data = record })
 end)
 
-{{Name}}Action.store = with_db(function(ctx, db)
+{{Name}}Controller.store = with_db(function(ctx, db)
     local record, err = {{Name}}Service.create(db, ctx.body)
     if not record then return failure(ctx, "unable to create {{name}}", err, "{{name}}_create_failed") end
     return ctx:json(201, { data = record })
 end)
 
-{{Name}}Action.update = with_db(function(ctx, db)
+{{Name}}Controller.update = with_db(function(ctx, db)
     local record, err = {{Name}}Service.update(db, ctx.params.id, ctx.body)
     if err then return failure(ctx, "unable to update {{name}}", err, "{{name}}_update_failed") end
     if not record then return ctx:error(404, "{{name}} not found", nil, "{{name}}_not_found") end
     return ctx:json(200, { data = record })
 end)
 
-{{Name}}Action.destroy = with_db(function(ctx, db)
+{{Name}}Controller.destroy = with_db(function(ctx, db)
     local deleted, err = {{Name}}Service.delete(db, ctx.params.id)
     if err then return failure(ctx, "unable to delete {{name}}", err, "{{name}}_delete_failed") end
     if not deleted then return ctx:error(404, "{{name}} not found", nil, "{{name}}_not_found") end
     return ctx:no_content()
 end)
 
-return {{Name}}Action
+return {{Name}}Controller
 ]]
 
 Templates.module_service = [[

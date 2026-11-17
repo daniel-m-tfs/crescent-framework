@@ -13,10 +13,11 @@ RUN luarocks install --tree=/app/lua_modules etlua \
 
 COPY . /app
 
-# Run as an unprivileged user; nginx only needs to write logs/ and tmp/.
+# Run as an unprivileged user; it only writes logs/, tmp/ and storage/
+# (uploads: upload_root = "storage").
 RUN addgroup -S crescent && adduser -S -G crescent -H -h /app crescent \
- && mkdir -p logs tmp \
- && chown -R crescent:crescent logs tmp \
+ && mkdir -p logs tmp storage \
+ && chown -R crescent:crescent logs tmp storage \
  && chmod +x docker/entrypoint.sh bin/crescent
 
 USER crescent

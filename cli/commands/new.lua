@@ -6,6 +6,7 @@
 local cli_output = require("crescent.utils.cli_output")
 local fs = require("cli.fs")
 local Templates = require("cli.templates")
+local EnvFile = require("cli.env_file")
 
 local New = {}
 
@@ -15,7 +16,8 @@ local FRAMEWORK_FILES = {
     "Dockerfile", "docker-compose.yml", ".dockerignore",
 }
 local EXECUTABLES = {
-    "bin/crescent", "deps.sh", "test.sh", "docker/entrypoint.sh", "docker/mysql-init/01-test-database.sh",
+    "bin/crescent", "deps.sh", "test.sh", "tests/test-http.sh",
+    "docker/entrypoint.sh", "docker/mysql-init/01-test-database.sh",
 }
 
 -- Template files named `dot-x` become `.x`, so the template tree never
@@ -50,6 +52,10 @@ local function scaffold(source_root, target, vars)
         if not ok then return nil, err end
     end
     for _, relative in ipairs(EXECUTABLES) do fs.chmod_executable(fs.join(target, relative)) end
+    -- .env = .env.example with fresh APP_KEY/JWT_SECRET; it is git-ignored,
+    -- so secrets never land in the repository.
+    local created, err = EnvFile.ensure(target)
+    if created == nil then return nil, err end
     return true
 end
 
@@ -85,13 +91,15 @@ function New.run(name, options)
         return false
     end
 
-    print("Project created in " .. target)
-    cli_output.print_info("Next steps:")
-    print("  cd " .. name)
-    print("  cp .env.example .env")
-    print("  docker compose up --build    # app + MySQL on http://127.0.0.1:8080")
-    print("or without Docker (OpenResty installed locally):")
-    print("  ./deps.sh && ./bin/crescent server start")
+    cli_output.print_success("Project created in " .. target)
+    cli_output.print_success(".env created with random APP_KEY and JWT_SECRET")
+    print("")
+    cli_output.print_info("With Docker (app + MySQL on http://127.0.0.1:8080, hot reload):")
+    cli_output.print_code("cd " .. name .. "\nlua cli.lua run")
+    cli_output.print_info("Without Docker (OpenResty installed locally):")
+    cli_output.print_code("cd " .. name .. "\n./deps.sh\nlua cli.lua server start")
+    cli_output.print_info("Or let the CLI set up git, the database credentials and Docker:")
+    cli_output.print_code("cd " .. name .. "\nlua cli.lua setup")
     return true
 end
 

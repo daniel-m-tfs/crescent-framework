@@ -7,6 +7,8 @@ cd "$(dirname "$0")"
 
 ./bin/crescent test "$@"
 
-if [ -x "${OPENRESTY_BIN:-/opt/homebrew/opt/openresty/bin/openresty}" ] && [ $# -eq 0 ] && [ -f tests/test-http.sh ]; then
+# The HTTP test starts its own OpenResty on APP_PORT; skipped in the container,
+# where the app already listens there.
+if [ $# -eq 0 ] && [ -f tests/test-http.sh ] && [ ! -f /.dockerenv ]; then
 	./bin/crescent test:http
 fi

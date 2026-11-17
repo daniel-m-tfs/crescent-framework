@@ -41,6 +41,13 @@ local function rejecter(options, challenge)
     end
 end
 
+-- Validators may return an error table or object; only strings reach the
+-- client so internal details never leak into the 401 body.
+local function public_message(value, default)
+    if type(value) == "string" and value ~= "" then return value end
+    return default
+end
+
 local function accept(ctx, next, user)
     ctx.state.user = user
     return next()
@@ -58,7 +65,7 @@ function Auth.bearer(validator, options)
         if not token then return reject(ctx, next, "missing or invalid authorization header", "missing_credentials") end
         local ok, user_or_error = validator(token, ctx)
         if not ok then
-            return reject(ctx, next, user_or_error or "unauthorized", "invalid_credentials", 'Bearer error="invalid_token"')
+            return reject(ctx, next, public_message(user_or_error, "unauthorized"), "invalid_credentials", 'Bearer error="invalid_token"')
         end
         return accept(ctx, next, user_or_error)
     end
@@ -82,7 +89,7 @@ function Auth.basic(validator, options)
         if decoded then username, password = decoded:match("^([^:]+):(.*)$") end
         if not username then return reject(ctx, next, "invalid credentials format", "invalid_credentials") end
         local ok, user_or_error = validator(username, password, ctx)
-        if not ok then return reject(ctx, next, user_or_error or "invalid credentials", "invalid_credentials") end
+        if not ok then return reject(ctx, next, public_message(user_or_error, "invalid credentials"), "invalid_credentials") end
         return accept(ctx, next, user_or_error)
     end
 end
@@ -101,7 +108,7 @@ function Auth.api_key(header_name, validator, options)
         if type(key) ~= "string" or key == "" then return reject(ctx, next, "missing api key", "missing_credentials") end
         if oversized(key) then return reject(ctx, next, "api key too large", "credentials_too_large") end
         local ok, user_or_error = validator(key, ctx)
-        if not ok then return reject(ctx, next, user_or_error or "invalid api key", "invalid_credentials") end
+        if not ok then return reject(ctx, next, public_message(user_or_error, "invalid api key"), "invalid_credentials") end
         return accept(ctx, next, user_or_error)
     end
 end

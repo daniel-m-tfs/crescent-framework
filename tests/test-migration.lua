@@ -135,7 +135,7 @@ local function file_tests()
     local result = runner:migrate()
     tests.assertTableEquals(result.migrated, { "20250101000000_first", "20260101000000_create_users" })
     tests.assertEquals(db.statements[1], "CREATE first")
-    tests.assertContains(db.statements[2], "CREATE TABLE `example`")
+    tests.assertContains(db.statements[2], "CREATE TABLE IF NOT EXISTS `users`", "the table comes from the migration name")
     tests.assertTableEquals(runner:rollback().rolled_back, { "20260101000000_create_users", "20250101000000_first" })
 
     -- the CLI functions work against an injected adapter

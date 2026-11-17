@@ -60,7 +60,7 @@ end
 local function generators_write_loadable_files()
     with_root(function(root)
         quietly(function()
-            tests.assertTrue(Make.action("Order", "shop"))
+            tests.assertTrue(Make.controller("Order", "shop"))
             tests.assertTrue(Make.service("Order", "shop"))
             tests.assertTrue(Make.model("Order", "shop"))
             tests.assertTrue(Make.routes("Order", "shop"))
@@ -69,7 +69,7 @@ local function generators_write_loadable_files()
             tests.assertTrue(Make.test("Order"))
         end)
         for _, relative in ipairs({
-            "src/shop/actions/order.lua", "src/shop/services/order.lua", "src/shop/models/order.lua",
+            "src/shop/controllers/order.lua", "src/shop/services/order.lua", "src/shop/models/order.lua",
             "src/shop/routes/order.lua", "src/middleware/require_auth.lua", "src/shop/middleware/audit.lua",
             "tests/test-order.lua",
         }) do
@@ -87,13 +87,13 @@ end
 
 local function never_overwrites()
     with_root(function(root)
-        local path = fs.join(root, "src/shop/actions/order.lua")
+        local path = fs.join(root, "src/shop/controllers/order.lua")
         quietly(function()
-            tests.assertTrue(Make.action("Order", "shop"))
+            tests.assertTrue(Make.controller("Order", "shop"))
             local file = io.open(path, "w")
             file:write("-- edited")
             file:close()
-            tests.assertFalse(Make.action("Order", "shop"))
+            tests.assertFalse(Make.controller("Order", "shop"))
         end)
         tests.assertEquals(fs.read(path), "-- edited")
     end)
@@ -103,10 +103,10 @@ local function rejects_malicious_names()
     with_root(function(root)
         quietly(function()
             for _, name in ipairs(MALICIOUS) do
-                for _, generator in ipairs({ "action", "service", "model", "routes", "middleware", "test", "migration", "module" }) do
+                for _, generator in ipairs({ "controller", "service", "model", "routes", "middleware", "test", "migration", "module" }) do
                     tests.assertFalse(Make[generator](name), generator .. " accepted " .. name)
                 end
-                tests.assertFalse(Make.action("Valid", name), "accepted module " .. name)
+                tests.assertFalse(Make.controller("Valid", name), "accepted module " .. name)
             end
         end)
         tests.assertEquals(#fs.list_files(root), 0, "nothing may be written for invalid names")
@@ -121,6 +121,10 @@ local function migration_file_format()
         tests.assertContains(migration.up(), "CREATE TABLE IF NOT EXISTS `widgets`")
         tests.assertEquals(migration.down(), "DROP TABLE IF EXISTS `widgets`")
         tests.assertNil(quietly(Make.migration_file, "create_widgets_table", "20260101120000"))
+
+        local alter = dofile(fs.join(root, quietly(Make.migration_file, "add_price_to_widgets", "20260101120001")))
+        tests.assertContains(alter.up(), "ALTER TABLE `widgets` ADD COLUMN")
+        tests.assertContains(alter.down(), "ALTER TABLE `widgets` DROP COLUMN")
     end)
 end
 
@@ -148,7 +152,7 @@ local function crud_module_works()
     with_root(function(root)
         tests.assertTrue(quietly(Make.module, "Gadget"))
         for _, relative in ipairs({ "src/gadget/init.lua", "src/gadget/models/gadget.lua",
-            "src/gadget/services/gadget.lua", "src/gadget/actions/gadget.lua", "src/gadget/routes/gadget.lua",
+            "src/gadget/services/gadget.lua", "src/gadget/controllers/gadget.lua", "src/gadget/routes/gadget.lua",
             "tests/test-gadget-module.lua" }) do
             assert_loads(fs.join(root, relative))
         end

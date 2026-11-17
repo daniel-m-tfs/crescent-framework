@@ -28,8 +28,8 @@ local function migrator(options)
         path = options.path,
         table = options.table,
         log = function(event, name)
-            if event == "migrating" then print("-> migrating " .. name)
-            elseif event == "rolling_back" then print("-> rolling back " .. name) end
+            if event == "migrating" then print("  → migrating " .. name)
+            elseif event == "rolling_back" then print("  ← rolling back " .. name) end
         end,
     })
 end
@@ -56,7 +56,7 @@ DbCommand.migrate = guarded(function(options)
     if #result.migrated == 0 then
         cli_output.print_info("Nothing to migrate")
     else
-        print(string.format("Batch %d: %d migration(s) applied", result.batch, #result.migrated))
+        cli_output.print_success(string.format("Batch %d: %d migration(s) applied", result.batch, #result.migrated))
     end
     return true
 end)
@@ -74,7 +74,7 @@ DbCommand.rollback = guarded(function(options)
     if #result.rolled_back == 0 then
         cli_output.print_info("Nothing to roll back")
     else
-        print(string.format("Batch %d: %d migration(s) reverted", result.batch, #result.rolled_back))
+        cli_output.print_success(string.format("Batch %d: %d migration(s) reverted", result.batch, #result.rolled_back))
     end
     return true
 end)
@@ -90,10 +90,22 @@ DbCommand.status = guarded(function(options)
         cli_output.print_info("No migrations found")
         return true
     end
-    print(string.format("%-50s %-8s %s", "Migration", "Status", "Batch"))
+    local colors = cli_output.colors
+    local STATUS_COLOR = { ran = "green", pending = "yellow", missing = "red" }
+    print(colors.bold .. string.format("  %-50s %-8s %s", "Migration", "Status", "Batch") .. colors.reset)
+    local pending = 0
     for _, row in ipairs(rows) do
         local status = row.missing and "missing" or (row.ran and "ran" or "pending")
-        print(string.format("%-50s %-8s %s", row.name, status, row.batch and tostring(row.batch) or ""))
+        if status == "pending" then pending = pending + 1 end
+        print(string.format("  %-50s %s %s", row.name,
+            cli_output.paint(STATUS_COLOR[status], string.format("%-8s", status)),
+            row.batch and tostring(row.batch) or ""))
+    end
+    print("")
+    if pending > 0 then
+        cli_output.print_info(pending .. " pending migration(s): run db:migrate")
+    else
+        cli_output.print_success("Database is up to date")
     end
     return true
 end)
@@ -104,7 +116,7 @@ DbCommand.seed = guarded(function(options)
     local Seeder = require("crescent.database.seeder")
     local seeder = Seeder.new(database(options), {
         path = options.seeds_path,
-        log = function(_, name) print("-> seeding " .. name) end,
+        log = function(_, name) print("  → seeding " .. name) end,
     })
     local result, err = seeder:run(options.name)
     if not result then
@@ -114,7 +126,7 @@ DbCommand.seed = guarded(function(options)
     if #result.seeded == 0 then
         cli_output.print_info("No seeders found in " .. (options.seeds_path or "seeds") .. "/")
     else
-        print(string.format("%d seeder(s) applied", #result.seeded))
+        cli_output.print_success(string.format("%d seeder(s) applied", #result.seeded))
     end
     return true
 end)
@@ -133,8 +145,9 @@ end
 -- Writes seeds/<name>.lua. Returns the path or false.
 function DbCommand.make_seeder(name, options)
     options = options or {}
-    if type(name) ~= "string" or not name:match("^[%a][%w_]*$") then
-        cli_output.print_error("seeder name must match ^[A-Za-z][A-Za-z0-9_]*$")
+    -- A numeric prefix (01_admin_user) controls the order seeders run in.
+    if type(name) ~= "string" or #name > 64 or not name:match("^[%w][%w_]*$") then
+        cli_output.print_error("seeder name must match ^[A-Za-z0-9][A-Za-z0-9_]*$ (e.g. 01_admin_user)")
         return false
     end
     local directory = options.path or "seeds"
@@ -153,30 +166,10 @@ function DbCommand.make_seeder(name, options)
     end
     file:write(string.format(SEEDER_TEMPLATE, name))
     file:close()
-    print("Created " .. path)
+    cli_output.print_success("Seeder      " .. path)
+    cli_output.print_info("Run it with: lua cli.lua db:seed " .. name)
     return path
 end
-
-local TEMPLATE = [[
--- Migration %s
--- up/down return a SQL string, a list of statements, or { sql = ..., bindings = { ... } }.
--- MySQL DDL commits implicitly: keep one schema change per migration when possible.
-return {
-    up = function(db)
-        return [==[
-            CREATE TABLE `example` (
-                `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-                `created_at` TIMESTAMP NULL,
-                `updated_at` TIMESTAMP NULL
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-        ]==]
-    end,
-
-    down = function(db)
-        return "DROP TABLE `example`"
-    end,
-}
-]]
 
 -- Writes migrations/YYYYMMDDHHMMSS_<name>.lua. Returns the path or false.
 function DbCommand.make_migration(name, options)
@@ -202,9 +195,9 @@ function DbCommand.make_migration(name, options)
         cli_output.print_error("unable to write " .. path .. ": " .. tostring(err))
         return false
     end
-    file:write(string.format(TEMPLATE, file_name))
+    file:write(require("cli.templates").migration_for(name))
     file:close()
-    print("Created " .. path)
+    cli_output.print_success("Migration   " .. path)
     return path
 end
 

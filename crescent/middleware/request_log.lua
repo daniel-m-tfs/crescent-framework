@@ -31,7 +31,16 @@ function RequestLog.create(options)
         local request_logger = logger:with({ request_id = ctx.request_id })
         ctx.state.log = request_logger
         local started = now()
-        local result = next()
+        -- Finalize here so the logged status is the one actually sent: a
+        -- returned table/string, an empty response (500) or a raised error.
+        local ok, result = xpcall(next, debug.traceback)
+        local app = ctx.app
+        if not ok then
+            if not app then error(result, 0) end
+            result = app:_handle_error(ctx, result)
+        elseif app and not ctx.res:is_sent() then
+            result = app:_finalize(ctx, result)
+        end
         local status = ctx.res.writer.status or 200
         local entry_level = status >= 500 and "error" or (status >= 400 and "warn" or level)
         request_logger:log(entry_level, "request", {

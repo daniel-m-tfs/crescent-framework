@@ -9,3 +9,5 @@ lua_modules/
 *_temp/
 tmp/*
 !tmp/.gitkeep
+storage/*
+!storage/.gitkeep

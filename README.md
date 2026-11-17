@@ -2,7 +2,7 @@
 
 Framework web em **Lua sobre OpenResty** (Nginx + LuaJIT), com MySQL. O OpenResty/Nginx cuida do
 HTTP (TLS, workers, keep-alive, limites, arquivos estáticos); o framework cuida
-de rotas, actions, middleware, validação, erros, ORM/MySQL, templates, segurança
+de rotas, controllers, middleware, validação, erros, ORM/MySQL, templates, segurança
 e CLI.
 
 ## Requisitos
@@ -14,12 +14,13 @@ e CLI.
 ## Início rápido
 
 ```bash
+lua cli.lua new meu-app        # projeto novo, já com .env e segredos aleatórios
+cd meu-app
 ./deps.sh                      # instala dependências em ./lua_modules
-cp .env.example .env           # configure DB_*, JWT_SECRET, SMTP_*
-./bin/crescent server start    # openresty -p . -c nginx.conf (porta 8080)
+lua cli.lua server start       # openresty -p . -c nginx.conf (porta 8080)
 curl http://127.0.0.1:8080/health   # liveness; /ready verifica o banco
-./bin/crescent make:module Product
-./bin/crescent db:migrate
+lua cli.lua make:module Product
+lua cli.lua db:migrate
 ```
 
 Em produção use `conf/nginx.production.conf` (revise antes):
@@ -33,7 +34,8 @@ Em produção use `conf/nginx.production.conf` (revise antes):
   `crescent.env` (variável do processo > `.env` > padrão). **Toda variável
   usada precisa de uma diretiva `env NOME;` no nginx.conf** — o Nginx limpa o
   ambiente dos workers.
-- Actions recebem `ctx` e respondem com `ctx:json`, `ctx:text`, `ctx:html`,
+- Módulos em `src/<módulo>/{controllers,services,models,routes}` com
+  `init.lua` (`register(app)`). Controllers recebem `ctx` e respondem com `ctx:json`, `ctx:text`, `ctx:html`,
   `ctx:view`, `ctx:redirect`, `ctx:no_content` ou `ctx:error(status, msg,
   detalhes, codigo)`. Retornar uma tabela/string envia 200 JSON/texto.
 - Middleware: `app:use(function(ctx, next) ... return next() end)`; para
