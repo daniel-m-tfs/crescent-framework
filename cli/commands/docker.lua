@@ -1,5 +1,6 @@
 -- `run`, `rerun` and `stop`: the Docker development stack (docker-compose.yml:
--- app with the source mounted and lua_code_cache off, plus MySQL). Edits to
+-- app with the source mounted and lua_code_cache off, plus MySQL, and Redis +
+-- a queue worker when COMPOSE_PROFILES=redis is in .env). Edits to
 -- Lua files apply on the next request; `rerun` rebuilds the image for changes
 -- to the Dockerfile, dependencies or nginx configuration.
 local cli_output = require("crescent.utils.cli_output")
@@ -7,6 +8,16 @@ local fs = require("cli.fs")
 local EnvFile = require("cli.env_file")
 
 local Docker = {}
+
+-- True when .env turns on the compose "redis" profile (redis + worker).
+function Docker.redis_enabled(text)
+    text = text or fs.read(".env") or ""
+    local profiles = EnvFile.get(text, "COMPOSE_PROFILES") or ""
+    for profile in profiles:gmatch("[^,%s]+") do
+        if profile == "redis" then return true end
+    end
+    return false
+end
 
 -- Seconds to wait for /health after `up` (the first boot initializes MySQL).
 Docker.timeout = 180
@@ -110,8 +121,8 @@ function Docker.run(options)
     end
 
     if options.fresh then
-        cli_output.print_info("Building the app image without cache...")
-        if not fs.execute(compose .. " build --no-cache app") then
+        cli_output.print_info("Building the images without cache...")
+        if not fs.execute(compose .. " build --no-cache") then
             cli_output.print_error("docker build failed")
             return false
         end
@@ -135,6 +146,11 @@ function Docker.run(options)
     print("  App:    http://127.0.0.1:" .. port .. "   (/health, /ready, /api/hello?name=Ada)")
     print("  MySQL:  127.0.0.1:" .. env_value("DB_FORWARD_PORT", "3307") .. "   user " .. env_value("DB_USER", "crescent")
         .. ", database " .. env_value("DB_NAME", "?"))
+    if Docker.redis_enabled() then
+        print("  Redis:  127.0.0.1:" .. env_value("REDIS_FORWARD_PORT", "6380")
+            .. "   cache " .. env_value("CACHE_DRIVER", "shared") .. ", queue " .. env_value("QUEUE_DRIVER", "shared")
+            .. "   (worker logs: " .. compose .. " logs -f worker)")
+    end
     print("")
     cli_output.print_info("Logs: lua cli.lua run --logs  ·  rebuild: lua cli.lua rerun  ·  stop: lua cli.lua stop")
     cli_output.print_info("CLI inside the container: docker compose exec app bin/crescent <command>")
@@ -173,11 +189,12 @@ Docker.run_command = with_options(false)
 Docker.rerun_command = with_options(true)
 
 -- Stops and removes the containers; volumes (database, uploads) are kept.
+-- `--profile redis` also stops redis/worker after the profile was turned off.
 function Docker.stop()
     cli_output.print_header("Stopping the Docker stack")
     local compose = preflight()
     if not compose then return false end
-    if not fs.execute(compose .. " down") then
+    if not fs.execute(compose .. " --profile redis down") then
         cli_output.print_error("docker compose down failed")
         return false
     end

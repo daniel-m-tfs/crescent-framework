@@ -1,5 +1,7 @@
 # Development stack: the app with live code reload (lua_code_cache off) and
 # MySQL. Copy .env.example to .env first; `docker compose up --build`.
+# Optional Redis (cache + queues) and a queue worker: COMPOSE_PROFILES=redis
+# in .env (`lua cli.lua setup` asks), with CACHE_DRIVER/QUEUE_DRIVER=redis.
 services:
   app:
     build: .
@@ -9,6 +11,8 @@ services:
       NGINX_CONF: ${NGINX_CONF:-conf/nginx.docker-dev.conf}
       DB_HOST: mysql
       DB_PORT: "3306"
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
       RUN_MIGRATIONS: ${RUN_MIGRATIONS:-true}
     ports:
       - "${APP_PORT:-8080}:8080"
@@ -23,6 +27,59 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
+      redis:
+        condition: service_healthy
+        required: false
+    restart: unless-stopped
+
+  # Processes QUEUE_DRIVER=redis jobs (lua cli.lua queue:work). In development
+  # it reloads src/ for every job, so code edits apply without a restart.
+  worker:
+    build: .
+    profiles: ["redis"]
+    command: ["bin/crescent", "queue:work"]
+    env_file: .env
+    environment:
+      APP_ENV: ${APP_ENV:-development}
+      DB_HOST: mysql
+      DB_PORT: "3306"
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      RUN_MIGRATIONS: "false"
+    volumes:
+      - .:/app
+      - /app/lua_modules
+      - /app/logs
+      - /app/tmp
+      - app-storage:/app/storage
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    # The image's HEALTHCHECK probes the HTTP server, which a worker has not.
+    healthcheck:
+      disable: true
+    init: true
+    restart: unless-stopped
+
+  redis:
+    image: redis:7.4-alpine
+    profiles: ["redis"]
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      REDISCLI_AUTH: ${REDIS_PASSWORD:-}
+    # Append-only file: queued jobs survive a restart.
+    command: ["sh", "-c", "exec redis-server --appendonly yes $${REDIS_PASSWORD:+--requirepass \"$$REDIS_PASSWORD\"}"]
+    volumes:
+      - redis-data:/data
+    ports:
+      - "127.0.0.1:${REDIS_FORWARD_PORT:-6380}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
     restart: unless-stopped
 
   mysql:
@@ -48,3 +105,4 @@ services:
 volumes:
   app-storage:
   mysql-data:
+  redis-data:

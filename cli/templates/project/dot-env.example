@@ -18,6 +18,20 @@ DB_ROOT_PASSWORD=crescent_root_dev_password
 # Host port for MySQL from docker compose (127.0.0.1 only).
 DB_FORWARD_PORT=3307
 
+# Cache and queues. "shared" keeps them in the OpenResty server's memory (no
+# extra service; queue jobs run inside the server and are lost on restart).
+# "redis" needs Redis: with Docker set COMPOSE_PROFILES=redis to start the
+# redis and worker services (`lua cli.lua setup` does it for you).
+CACHE_DRIVER=shared
+QUEUE_DRIVER=shared
+COMPOSE_PROFILES=
+REDIS_HOST=127.0.0.1
+REDIS_PORT=6379
+REDIS_PASSWORD=
+REDIS_DB=0
+# Host port for Redis from docker compose (127.0.0.1 only).
+REDIS_FORWARD_PORT=6380
+
 # 32+ bytes when using crescent.middleware.auth.jwt: openssl rand -base64 48
 JWT_SECRET=
 

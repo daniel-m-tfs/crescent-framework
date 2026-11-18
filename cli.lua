@@ -32,6 +32,7 @@ local HELP = {
         { "make:service <name> [module]", "src/<module>/services/<name>.lua" },
         { "make:model <name> [module]", "src/<module>/models/<name>.lua" },
         { "make:routes <name> [module]", "src/<module>/routes/<name>.lua" },
+        { "make:job <name> [module]", "src/<module>/jobs/<name>.lua (background job)" },
         { "make:middleware <name> [module]", "src/middleware/<name>.lua (or inside a module)" },
         { "make:test <name>", "tests/test-<name>.lua" },
         { "make:migration <name>", "migrations/YYYYMMDDHHMMSS_<name>.lua" },
@@ -42,6 +43,14 @@ local HELP = {
         { "db:rollback", "Roll back the last batch          (alias: migrate:rollback)" },
         { "db:status", "Show migration status             (alias: migrate:status)" },
         { "db:seed [name]", "Run seeders in seeds/ (or only <name>)" },
+    } },
+    { "Queues and cache (QUEUE_DRIVER/CACHE_DRIVER=redis)", {
+        { "queue:work [--queue=a,b] [--once]", "Process jobs (--sleep, --max-jobs, --max-time, --stop-when-empty)" },
+        { "queue:status [queue]", "Ready, delayed, reserved and failed counts" },
+        { "queue:failed [queue]", "List failed jobs (--limit=20)" },
+        { "queue:retry <id|all> [--queue=]", "Requeue failed jobs" },
+        { "queue:clear-failed [queue]", "Delete failed jobs" },
+        { "cache:clear", "Delete every key under the cache prefix" },
     } },
     { "Tests", {
         { "test [filter]", "Run tests/ on OpenResty LuaJIT (filter by file name)" },
@@ -56,6 +65,7 @@ local EXAMPLES = {
     "lua cli.lua make:module Product",
     "lua cli.lua make:controller Report shop",
     "lua cli.lua make:migration add_price_to_products",
+    "lua cli.lua make:job send_welcome users",
     "lua cli.lua db:migrate",
     "lua cli.lua test products",
 }
@@ -122,6 +132,7 @@ local COMMANDS = {
     ["make:service"] = make("service", "make:service <name> [module]"),
     ["make:model"] = make("model", "make:model <name> [module]"),
     ["make:routes"] = make("routes", "make:routes <name> [module]"),
+    ["make:job"] = make("job", "make:job <name> [module]"),
     ["make:middleware"] = make("middleware", "make:middleware <name> [module]"),
     ["make:test"] = make("test", "make:test <name>"),
     ["make:migration"] = make("migration", "make:migration <name>"),
@@ -133,6 +144,12 @@ local COMMANDS = {
     ["db:rollback"] = db("rollback"),
     ["db:status"] = db("status"),
     ["db:seed"] = db("seed"),
+    ["queue:work"] = function() return require("cli.commands.queue").work(args) end,
+    ["queue:status"] = function() return require("cli.commands.queue").status(args) end,
+    ["queue:failed"] = function() return require("cli.commands.queue").failed(args) end,
+    ["queue:retry"] = function() return require("cli.commands.queue").retry(args) end,
+    ["queue:clear-failed"] = function() return require("cli.commands.queue").clear_failed(args) end,
+    ["cache:clear"] = function() return require("cli.commands.queue").cache_clear() end,
 }
 COMMANDS.migrate = COMMANDS["db:migrate"]
 COMMANDS["migrate:rollback"] = COMMANDS["db:rollback"]
@@ -149,6 +166,8 @@ end
 local NEEDS_OPENRESTY = {
     routes = true, ["db:migrate"] = true, ["db:rollback"] = true, ["db:status"] = true, ["db:seed"] = true,
     migrate = true, ["migrate:rollback"] = true, ["migrate:status"] = true,
+    ["queue:work"] = true, ["queue:status"] = true, ["queue:failed"] = true, ["queue:retry"] = true,
+    ["queue:clear-failed"] = true, ["cache:clear"] = true,
 }
 
 local function shell_quote(value)

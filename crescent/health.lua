@@ -13,7 +13,13 @@ local function database_check(ctx)
     return true
 end
 
-Health.checks = { database = database_check }
+local function redis_check(ctx)
+    local redis = ctx.redis
+    if not redis then return nil, "redis not configured" end
+    return redis:ping()
+end
+
+Health.checks = { database = database_check, redis = redis_check }
 
 local function now()
     if ngx and ngx.now then
@@ -25,12 +31,16 @@ end
 
 -- options: path (default "/health"), ready_path (default "/ready"),
 -- checks = { name = function(ctx) -> true | nil, err } (default: database
--- when the app has one), service (name shown in the payload).
+-- and redis when the app uses them), service (name shown in the payload).
 -- Check errors are logged but not exposed unless debug is on.
 function Health.register(app, options)
     options = options or {}
     local checks = options.checks
-    if checks == nil then checks = app.db and { database = database_check } or {} end
+    if checks == nil then
+        checks = {}
+        if app.db then checks.database = database_check end
+        if app.redis then checks.redis = redis_check end
+    end
     local service = options.service or "crescent"
 
     app:get(options.path or "/health", function(ctx)

@@ -14,6 +14,9 @@ local lazy = {
     model = "crescent.model",
     http_client = "crescent.http_client",
     mail = "crescent.mail",
+    redis = "crescent.redis",
+    cache = "crescent.cache",
+    queue = "crescent.queue",
 }
 
 local groups = {

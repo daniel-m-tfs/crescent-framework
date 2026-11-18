@@ -43,7 +43,7 @@ local function run_file(path)
     -- Child output is piped, so colors are forwarded explicitly.
     local color = cli_output.is_enabled() and "1" or "0"
     local command = "CRESCENT_COLOR=" .. color .. " " .. shell_quote(resty_bin())
-        .. " -I lua_modules/share/lua/5.1 --shdict 'crescent_limits 1m' --shdict 'crescent_jwt 1m' --shdict 'crescent_sessions 1m' "
+        .. " -I lua_modules/share/lua/5.1 --shdict 'crescent_limits 1m' --shdict 'crescent_jwt 1m' --shdict 'crescent_sessions 1m' --shdict 'crescent_cache 4m' --shdict 'crescent_queue 4m' "
         .. shell_quote(path) .. " 2>&1; printf '\n__CRESCENT_EXIT__:%s\n' $?"
     local handle = io.popen(command)
     if not handle then return false, "unable to start resty" end

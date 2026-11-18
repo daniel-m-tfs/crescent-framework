@@ -64,13 +64,14 @@ local function generators_write_loadable_files()
             tests.assertTrue(Make.service("Order", "shop"))
             tests.assertTrue(Make.model("Order", "shop"))
             tests.assertTrue(Make.routes("Order", "shop"))
+            tests.assertTrue(Make.job("SendReceipt", "shop"))
             tests.assertTrue(Make.middleware("RequireAuth"))
             tests.assertTrue(Make.middleware("Audit", "shop"))
             tests.assertTrue(Make.test("Order"))
         end)
         for _, relative in ipairs({
             "src/shop/controllers/order.lua", "src/shop/services/order.lua", "src/shop/models/order.lua",
-            "src/shop/routes/order.lua", "src/middleware/require_auth.lua", "src/shop/middleware/audit.lua",
+            "src/shop/routes/order.lua", "src/shop/jobs/send_receipt.lua", "src/middleware/require_auth.lua", "src/shop/middleware/audit.lua",
             "tests/test-order.lua",
         }) do
             assert_loads(fs.join(root, relative))

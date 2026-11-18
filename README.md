@@ -60,6 +60,7 @@ Em produção use `conf/nginx.production.conf` (revise antes):
 | CLI (`new`, `make:*`, `server`, `routes`, `db:*`) | [docs/cli.md](docs/cli.md) |
 | HTTP client e e-mail | [docs/integrations.md](docs/integrations.md) |
 | Logs estruturados, health/readiness | [docs/observability.md](docs/observability.md) |
+| Cache, filas e Redis (opcional) | [docs/cache-queue.md](docs/cache-queue.md) |
 
 ## Testes
 

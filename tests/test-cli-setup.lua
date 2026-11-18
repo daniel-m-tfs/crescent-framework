@@ -111,7 +111,22 @@ local function docker_options()
     tests.assertEquals(Docker.project_name("/srv/crescent-starter"), "crescent-starter")
 end
 
+local function redis_choice()
+    local on = Setup.redis_values("REDIS_PASSWORD=\n", true)
+    tests.assertEquals(on.CACHE_DRIVER, "redis")
+    tests.assertEquals(on.QUEUE_DRIVER, "redis")
+    tests.assertEquals(on.COMPOSE_PROFILES, "redis")
+    tests.assertEquals(#on.REDIS_PASSWORD, 32)
+    tests.assertNil(Setup.redis_values("REDIS_PASSWORD=kept-secret\n", true).REDIS_PASSWORD)
+    tests.assertTableEquals(Setup.redis_values("", false),
+        { CACHE_DRIVER = "shared", QUEUE_DRIVER = "shared", COMPOSE_PROFILES = "" })
+    tests.assertTrue(Docker.redis_enabled("COMPOSE_PROFILES=tools,redis\n"))
+    tests.assertFalse(Docker.redis_enabled("COMPOSE_PROFILES=\n"))
+    tests.assertFalse(Docker.redis_enabled(""))
+end
+
 assert(tests.runSuite("CLI setup", {
+    redis_choice = redis_choice,
     env_file_edits_keep_other_lines = env_file_edits_keep_other_lines,
     env_file_ensure_never_overwrites = env_file_ensure_never_overwrites,
     setup_validation = setup_validation,

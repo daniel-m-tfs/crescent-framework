@@ -17,7 +17,7 @@ https://github.com/daniel-m-tfs/crescent-framework
   `require("app"):run()` per request. Module-level variables are shared by all
   requests of a worker: **never keep request data in module locals**; use
   `ctx.state`.
-- All I/O (MySQL, HTTP client, SMTP) uses non-blocking cosockets. **Never** use
+- All I/O (MySQL, Redis, HTTP client, SMTP) uses non-blocking cosockets. **Never** use
   blocking libraries (luasocket, io.popen, os.execute, luasql) in request code.
 - Development: `lua_code_cache off` (code reloads per request). Production:
   code is cached; reload Nginx to deploy.
@@ -38,6 +38,7 @@ src/<module>/
   models/<name>.lua        Model:extend({...})
   routes/<name>.lua        function(app, prefix) registering named routes
   middleware/<name>.lua    optional module middleware
+  jobs/<name>.lua          background jobs: handle(payload, job) (crescent.queue)
 src/middleware/         app-wide middleware
 views/                  etlua templates (layout.etlua + pages)
 public/                 static files served by Nginx at /public/
@@ -69,11 +70,14 @@ lua cli.lua make:module Product           # full CRUD module + test + migration
 lua cli.lua make:controller Report shop   # src/shop/controllers/report.lua
 lua cli.lua make:service|make:model|make:routes <name> [module]
 lua cli.lua make:middleware <name> [module]
+lua cli.lua make:job <name> [module]      # src/<module>/jobs/<name>.lua
 lua cli.lua make:test <name>              # tests/test-<name>.lua
 lua cli.lua make:migration create_orders_table | add_total_to_orders
 lua cli.lua make:seeder 01_admin_user
 lua cli.lua db:migrate | db:rollback | db:status | db:seed [name]
 lua cli.lua routes                        # METHOD PATH NAME
+lua cli.lua queue:work | queue:status | queue:failed | queue:retry <id|all>   # QUEUE_DRIVER=redis
+lua cli.lua cache:clear
 lua cli.lua test [filter]                 # unit tests; filter by file name
 lua cli.lua test:http                     # tests/test-http.sh against real OpenResty
 ```
@@ -396,7 +400,57 @@ receives the page in `content`.
 return ctx:view("orders/index.etlua", { title = "Orders", orders = list }, { layout = "layout.etlua" })
 ```
 
-## 12. Utilities
+## 12. Cache and queues
+
+Configured in `config/<env>.lua` (`cache`, `queue`, `redis`). Drivers come from
+`CACHE_DRIVER` / `QUEUE_DRIVER`: `shared` (default: this server's memory, no
+extra service, queue jobs run inside OpenResty and are lost on restart) or
+`redis` (durable, multi-server; jobs run in `lua cli.lua queue:work` / the
+Docker `worker` service). Tests use `queue.driver = "sync"` (push runs the job
+immediately and raises its errors).
+
+```lua
+-- Cache: JSON values (tables, strings, numbers, booleans); nil is never cached.
+ctx.cache:set("user:" .. id, user, 300)        -- ttl seconds (default config.cache.ttl; 0 = forever)
+local user = ctx.cache:get("user:" .. id)      -- nil on miss (and on backend errors)
+ctx.cache:delete("user:" .. id)                -- add, has, pull, incr(key, n, ttl), decr, flush
+local stats = ctx.cache:remember("stats", 60, function() return StatsService.compute(ctx.db) end)
+```
+
+Jobs are modules with `handle(payload, job)`; the job name is the module path.
+Generate with `lua cli.lua make:job send_welcome users`:
+
+```lua
+-- src/users/jobs/send_welcome.lua
+local SendWelcome = { queue = "default", attempts = 3, backoff = { 10, 60, 300 }, timeout = 60 }
+
+function SendWelcome.handle(payload, job)   -- job: id, attempts, db, cache, config, dispatch, log
+    local user = User:find(payload.user_id)
+    if not user then return end
+    local ok, err = Mail.new():send({ to = user.email, subject = "Welcome", text = "..." })
+    if not ok then error(err) end           -- or `return false, err`: retried after backoff
+end
+
+function SendWelcome.failed(payload, err, job) end   -- optional, after the last attempt
+return SendWelcome
+```
+
+```lua
+ctx.queue:push("src.users.jobs.send_welcome", { user_id = user.id })             -- -> job id
+ctx.queue:push("src.users.jobs.send_welcome", { user_id = user.id }, { delay = 60, queue = "mail" })
+```
+
+- Payloads must be JSON-serializable: pass ids, not models or functions.
+- Delivery is at-least-once (crash/timeout re-runs a job): make `handle`
+  idempotent and keep `timeout` above the job's longest run.
+- Never `ngx.sleep`-poll for job results in a request; respond 202 and let the
+  client poll a resource the job updates.
+- Long CPU work in jobs competes with requests when workers are embedded
+  (`shared` driver); move it to `redis` + a worker process.
+- Queue CLI (redis driver): `queue:work`, `queue:status`, `queue:failed`,
+  `queue:retry <id|all>`, `queue:clear-failed`, `cache:clear`.
+
+## 13. Utilities
 
 - HTTP client: `local api = require("crescent.http_client").new({ base_url = "...", timeout = 5 })`;
   `api:get(url, { params = {...} })`, `api:post(url, table_as_json)` → `res`
@@ -408,9 +462,9 @@ return ctx:view("orders/index.etlua", { title = "Orders", orders = list }, { lay
 - JSON: `require("crescent.json")` → `encode`, `decode`, `array`.
 - Env/config: `require("crescent.env").get("NAME", default)`, `.number`,
   `.boolean`; app config lives in `config/<APP_ENV>.lua`.
-- Health: `/health` (liveness) and `/ready` (DB check) come from `src/health`.
+- Health: `/health` (liveness) and `/ready` (DB and, when used, Redis checks) come from `src/health`.
 
-## 13. Tests
+## 14. Tests
 
 Unit tests run on OpenResty's LuaJIT and call the app without a server:
 
@@ -454,7 +508,7 @@ assert(tests.runSuite("Orders", { rejects_invalid_orders = rejects_invalid_order
 - Add new routes to `tests/test-http.sh` with `expect <status> <path> [text]`.
 - Always run `lua cli.lua test` after changes.
 
-## 14. Do / don't
+## 15. Do / don't
 
 Do:
 - Use the generators, then edit; keep the controllers/services/models/routes split.

@@ -71,7 +71,7 @@ function Application.new(config)
     if not db and type(config.database) == "table" and config.database.database then
         db = Database.configure(config.database)
     end
-    return setmetatable({
+    local app = setmetatable({
         db = db,
         config = merged,
         router = Router.new(),
@@ -81,6 +81,41 @@ function Application.new(config)
         logger = make_logger(config.logger),
         middleware = {},
     }, Application)
+    app:_configure_services(config)
+    return app
+end
+
+local function uses_redis(section)
+    return type(section) == "table" and section.driver == "redis"
+end
+
+-- Cache and queue are built only when configured. The Redis client (shared
+-- by both, connecting lazily) exists only when a driver uses it or
+-- config.redis.enabled is true, so /ready never checks an unused Redis.
+function Application:_configure_services(config)
+    local redis = config.redis_client
+    if not redis and type(config.redis) == "table"
+        and (config.redis.enabled or uses_redis(config.cache) or uses_redis(config.queue)) then
+        redis = require("crescent.redis").new(config.redis)
+    end
+    self.redis = redis
+    if type(config.cache) == "table" then
+        self.cache = require("crescent.cache").new(config.cache, { redis = redis })
+    end
+    if type(config.queue) == "table" then
+        local queue_config = merge({}, config.queue)
+        -- Development workers reload app modules (src.*) for every job.
+        queue_config.workers = merge({ reload = self.config.debug }, config.queue.workers)
+        self.queue = require("crescent.queue").new(queue_config, { redis = redis, logger = self.logger, app = self })
+    end
+end
+
+-- Starts the queue workers embedded in this nginx worker when
+-- config.queue.workers.embedded is on. nginx calls it from
+-- init_worker_by_lua; it does nothing for apps without a queue.
+function Application:start_workers()
+    if not self.queue then return 0 end
+    return self.queue:start_embedded()
 end
 
 function Application:get(path, action, name) self.router:add("GET", path, action, name) return self end
@@ -174,6 +209,9 @@ function Application:handle(request, writer)
     ctx.app = self
     ctx.config = self.config
     ctx.db = self.db
+    ctx.cache = self.cache
+    ctx.queue = self.queue
+    ctx.redis = self.redis
     ctx.view_renderer = self.view_renderer
     ctx.debug = self.config.debug
     ctx.res:header("X-Request-Id", ctx.request_id)

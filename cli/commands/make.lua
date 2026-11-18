@@ -7,6 +7,7 @@
 --   src/<module>/services/<name>.lua       business logic (no ctx)
 --   src/<module>/models/<name>.lua         Model:extend({...})
 --   src/<module>/routes/<name>.lua         function(app, prefix)
+--   src/<module>/jobs/<name>.lua           background job (crescent.queue)
 local cli_output = require("crescent.utils.cli_output")
 local fs = require("cli.fs")
 local Templates = require("cli.templates")
@@ -19,6 +20,7 @@ Make.root = "."
 local LABELS = {
     controller = "Controller",
     service = "Service",
+    job = "Job",
     model = "Model",
     routes = "Routes",
     middleware = "Middleware",
@@ -67,6 +69,14 @@ function Make.controller(name, module_name) return generate("controller", "contr
 function Make.service(name, module_name) return generate("service", "services", name, module_name) end
 function Make.model(name, module_name) return generate("model", "models", name, module_name) end
 function Make.routes(name, module_name) return generate("routes", "routes", name, module_name) end
+
+function Make.job(name, module_name)
+    if not generate("job", "jobs", name, module_name) then return false end
+    local vars = Templates.vars(name, module_name)
+    cli_output.print_info("Push it with:")
+    cli_output.print_code(string.format('ctx.queue:push("src.%s.jobs.%s", { --[[ payload ]] })', vars.module, vars.name))
+    return true
+end
 
 -- Without a module the middleware goes to src/middleware/<name>.lua.
 function Make.middleware(name, module_name)

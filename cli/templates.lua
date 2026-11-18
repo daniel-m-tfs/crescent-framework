@@ -83,6 +83,33 @@ end
 return {{Name}}Service
 ]]
 
+Templates.job = [[
+-- Background job. Push it from a controller or service:
+--   ctx.queue:push("src.{{module}}.jobs.{{name}}", { id = 1 })
+--   ctx.queue:push("src.{{module}}.jobs.{{name}}", { id = 1 }, { delay = 60 })
+-- A raised error (or `return false, err`) retries it after `backoff`
+-- seconds; failed() runs after the last attempt. Jobs may run more than
+-- once (crash, timeout): keep handle() idempotent.
+local {{Name}}Job = {
+    queue = "default",
+    attempts = 3,
+    backoff = { 10, 60, 300 },
+    timeout = 60,
+}
+
+-- payload: the JSON-decoded table given to push(); job: id, attempts,
+-- db, cache, config, dispatch(name, payload, options), log(level, message).
+function {{Name}}Job.handle(payload, job)
+    job.log("info", "{{name}} running", { attempt = job.attempts })
+end
+
+function {{Name}}Job.failed(payload, err, job)
+    job.log("error", "{{name}} gave up: " .. tostring(err))
+end
+
+return {{Name}}Job
+]]
+
 Templates.model = [[
 local Model = require("crescent.model")
 

@@ -2,7 +2,8 @@
 -- for development, asking before each step:
 --   1. git: a fresh history without the template's remote, optional own remote
 --   2. database: MySQL user/password for the Docker stack, written to .env
---   3. docker: start the stack with hot reload (`run`)
+--   3. cache/queues: in-memory ("shared") or Redis (compose profile "redis")
+--   4. docker: start the stack with hot reload (`run`)
 local cli_output = require("crescent.utils.cli_output")
 local fs = require("cli.fs")
 local EnvFile = require("cli.env_file")
@@ -199,6 +200,45 @@ local function setup_database()
     return true
 end
 
+-- Redis is optional: without it cache and queues use the OpenResty server's
+-- memory. With it, COMPOSE_PROFILES=redis starts the redis and worker services.
+function Setup.redis_values(text, enabled)
+    if not enabled then
+        return { CACHE_DRIVER = "shared", QUEUE_DRIVER = "shared", COMPOSE_PROFILES = "" }
+    end
+    local values = { CACHE_DRIVER = "redis", QUEUE_DRIVER = "redis", COMPOSE_PROFILES = "redis" }
+    local password = EnvFile.get(text, "REDIS_PASSWORD")
+    if password == nil or password == "" then values.REDIS_PASSWORD = EnvFile.random_secret(16) end
+    return values
+end
+
+local function setup_redis()
+    local text = fs.read(".env")
+    if not text then
+        cli_output.print_error(".env not found")
+        return false
+    end
+    if not fs.exists("docker-compose.yml") or not (fs.read("docker-compose.yml") or ""):find("redis", 1, true) then
+        cli_output.print_info("docker-compose.yml has no redis service: keeping CACHE_DRIVER/QUEUE_DRIVER as they are")
+        return true
+    end
+    cli_output.print_info("Without Redis, cache and queues live in the server's memory (jobs run inside it, lost on restart).")
+    local enabled = Prompt.confirm("Use Redis for cache and queues? (adds redis + worker containers)", Docker.redis_enabled(text))
+    local values = Setup.redis_values(text, enabled)
+    local ok, err = EnvFile.write(".", EnvFile.set(text, values))
+    if not ok then
+        cli_output.print_error("unable to write .env: " .. tostring(err))
+        return false
+    end
+    if enabled then
+        cli_output.print_success("Redis on: CACHE_DRIVER=redis, QUEUE_DRIVER=redis, COMPOSE_PROFILES=redis"
+            .. (values.REDIS_PASSWORD and ", random REDIS_PASSWORD" or ""))
+    else
+        cli_output.print_success("In-memory cache and queues (CACHE_DRIVER=shared, QUEUE_DRIVER=shared)")
+    end
+    return true
+end
+
 local function setup_docker()
     if not Docker.available() then
         cli_output.print_warning("Docker is not installed: skipping (https://docs.docker.com/get-docker/)")
@@ -218,11 +258,13 @@ function Setup.run()
     end
     cli_output.print_info("Press Enter to accept the default shown in parentheses.")
 
-    step(1, 3, "Git")
+    step(1, 4, "Git")
     if not setup_git() then return false end
-    step(2, 3, "Database (.env)")
+    step(2, 4, "Database (.env)")
     if not setup_database() then return false end
-    step(3, 3, "Docker")
+    step(3, 4, "Cache and queues")
+    if not setup_redis() then return false end
+    step(4, 4, "Docker")
     local ok, started = setup_docker()
     if not ok then return false end
 

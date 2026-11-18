@@ -6,7 +6,7 @@ Projeto [Crescent](https://crescent.tyne.com.br) — framework Lua sobre
 ## Rodando com Docker (recomendado)
 
 ```bash
-lua cli.lua setup     # git do zero (+ remote opcional), usuário/senha do MySQL e sobe o Docker
+lua cli.lua setup     # git do zero (+ remote opcional), usuário/senha do MySQL, Redis opcional e sobe o Docker
 lua cli.lua run       # dia a dia: sobe app + MySQL com hot reload (--logs acompanha os logs)
 lua cli.lua rerun     # reconstrói a imagem (Dockerfile, dependências, Nginx) e reinicia
 lua cli.lua stop      # para os containers; banco e uploads ficam nos volumes
@@ -16,6 +16,9 @@ lua cli.lua stop      # para os containers; banco e uploads ficam nos volumes
 - MySQL: `127.0.0.1:3307` (usuário/senha do `.env`)
 - O código é montado no container com recarga automática: edite e recarregue a página.
 - As migrations pendentes rodam ao subir (`RUN_MIGRATIONS=true`).
+- Cache e filas usam a memória do servidor por padrão. Com `COMPOSE_PROFILES=redis`
+  no `.env` (o `setup` pergunta), sobem também o Redis (`127.0.0.1:6380`) e um
+  `worker` de filas: `docker compose logs -f worker`.
 
 Comandos dentro do container (`bin/crescent` aceita os mesmos comandos de `lua cli.lua`):
 
@@ -46,10 +49,12 @@ lua cli.lua make:module Product        # CRUD completo + teste + migration
 lua cli.lua make:controller Report shop
 lua cli.lua make:migration add_price_to_products
 lua cli.lua db:migrate                 # db:rollback, db:status, db:seed
+lua cli.lua make:job send_welcome users
+lua cli.lua queue:status               # queue:work, queue:failed, queue:retry (QUEUE_DRIVER=redis)
 lua cli.lua test                       # ou: lua cli.lua test products
 ```
 
-Geradores, `test` e `server` rodam no Lua comum; comandos de banco e
+Geradores, `test` e `server` rodam no Lua comum; comandos de banco, filas e
 `routes` são repassados para `bin/crescent` (OpenResty/`resty`).
 
 ## Desenvolvendo com IA
