@@ -177,7 +177,7 @@ para você. Depois, `lua cli.lua run` sobe app + MySQL + Redis + worker e
 `REDIS_HOST` aponta para o serviço `redis`; fora dele, use
 `127.0.0.1:${REDIS_FORWARD_PORT:-6380}`.
 
-Em produção, rode o mesmo image com `command: ["bin/crescent", "queue:work"]`
+Em produção, rode a mesma imagem com `command: ["bin/crescent", "queue:work"]`
 para os workers e deixe `QUEUE_DRIVER=redis` em todos os containers.
 
 ## Redis direto
