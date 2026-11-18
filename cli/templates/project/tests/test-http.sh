@@ -44,3 +44,11 @@ expect 200 / 'Hello, World!'
 expect 200 '/api/hello?name=Ada' 'Hello, Ada!'
 expect 422 "/api/hello?name=$(printf 'x%.0s' $(seq 1 51))"
 expect 404 /missing
+
+# Static files need a real Content-Type (conf/mime.types): browsers ignore a
+# stylesheet served as application/octet-stream.
+css_type="$(curl -sS -o /dev/null -w '%{content_type}' "$base_url/public/css/app.css")"
+case "$css_type" in
+	text/css*) echo "✓ GET /public/css/app.css -> $css_type" ;;
+	*) echo "✗ GET /public/css/app.css: expected text/css, got $css_type" >&2; exit 1 ;;
+esac
